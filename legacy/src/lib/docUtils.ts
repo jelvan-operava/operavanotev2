@@ -48,6 +48,13 @@ const wrapText = (text: string, maxChars: number) => {
 };
 
 const markdownToPlainText = (content: string) => {
+  const stripHtml = (value: string) => {
+    if (typeof document === 'undefined') return value;
+    const wrapper = document.createElement('div');
+    wrapper.innerHTML = value;
+    return wrapper.textContent || wrapper.innerText || '';
+  };
+
   return content
     .split('\n')
     .map((line) => {
@@ -68,10 +75,9 @@ const markdownToPlainText = (content: string) => {
         .replace(/\*(.*?)\*/g, '$1')
         .replace(/__(.*?)__/g, '$1')
         .replace(/_(.*?)_/g, '$1')
-        .replace(/\[\^(\d+)\]/g, '[$1]')
-        .replace(/<br\s*\/?>/gi, '\n')
-        .replace(/<[^>]+>/g, '');
+        .replace(/\[\^(\d+)\]/g, '[$1]');
     })
+    .map((line) => stripHtml(line))
     .join('\n');
 };
 

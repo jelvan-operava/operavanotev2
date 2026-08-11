@@ -499,7 +499,7 @@ export default function BolekDocs({ showAlert }: { showAlert: (msg: string) => v
     const extractPdfText = (arrayBuffer: ArrayBuffer) => {
       const binary = Array.from(new Uint8Array(arrayBuffer)).map((byte) => String.fromCharCode(byte)).join('');
       const textChunks = [
-        ...binary.matchAll(/\(([^()]*(?:\\.[^()]*)*)\)\s*Tj/g),
+        ...binary.matchAll(/\(([^)]*)\)\s*Tj/g),
         ...binary.matchAll(/\[([^\]]+)\]\s*TJ/g),
       ].map((match) => match[1]);
 
@@ -529,12 +529,13 @@ export default function BolekDocs({ showAlert }: { showAlert: (msg: string) => v
         ? extractPdfText(rawResult as ArrayBuffer)
         : String(rawResult || '');
       const importedText = isHtml
-        ? text
-            .replace(/<script[\s\S]*?<\/script>/gi, '')
-            .replace(/<style[\s\S]*?<\/style>/gi, '')
-            .replace(/<\/(p|div|h[1-6]|li|tr)>/gi, '\n')
-            .replace(/<br\s*\/?>/gi, '\n')
-            .replace(/<[^>]+>/g, '')
+        ? (() => {
+            if (typeof document === 'undefined') return text;
+            const wrapper = document.createElement('div');
+            wrapper.innerHTML = text;
+            wrapper.querySelectorAll('script,style').forEach((node) => node.remove());
+            return wrapper.textContent || wrapper.innerText || '';
+          })()
         : text;
 
       if (!importedText.trim()) {
