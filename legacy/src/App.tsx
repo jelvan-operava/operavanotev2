@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bolekpad, Boleknote, ActiveTab, ThemeDialogConfig, UserAccount, FeatureAccessConfig, SubscriptionPlan, UserRole } from './types';
+import { Bolekpad, Boleknote, ActiveTab, ThemeDialogConfig, UserAccount, FeatureAccessConfig, SubscriptionPlan, UserRole, NoteAttachment } from './types';
 import BolekCalendar from './components/BolekCalendar';
 import BolekAuth from './components/BolekAuth';
 import { BolekDashboard } from './components/BolekDashboard';
@@ -22,6 +22,32 @@ const NOTE_COLORS = [
   { name: 'Mint', value: '#d1fae5' },
   { name: 'Green', value: '#dcfce7' }
 ];
+
+const NOTE_FONT_FAMILIES = [
+  { label: 'Inter', value: 'Inter, system-ui, sans-serif' },
+  { label: 'Serif', value: 'Georgia, serif' },
+  { label: 'Mono', value: 'ui-monospace, SFMono-Regular, monospace' },
+  { label: 'Handwritten', value: '"Comic Sans MS", "Segoe Print", cursive' },
+];
+
+const classifyAttachment = (url: string): NoteAttachment['kind'] => {
+  if (/youtu\.be\/|youtube\.com\/watch|youtube\.com\/embed/i.test(url)) return 'video';
+  if (/\.(png|jpe?g|gif|webp|avif)(\?.*)?$/i.test(url) || /res\.cloudinary\.com/i.test(url)) return 'image';
+  return 'link';
+};
+
+const normalizeAttachment = (url: string, label?: string): NoteAttachment => ({
+  id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+  url,
+  kind: classifyAttachment(url),
+  label: label?.trim() || undefined,
+});
+
+const toEmbedUrl = (url: string) => {
+  const match = url.match(/(?:youtube\.com\/watch\?v=|youtube\.com\/embed\/|youtu\.be\/)([A-Za-z0-9_-]+)/i);
+  if (!match) return url;
+  return `https://www.youtube.com/embed/${match[1]}`;
+};
 
 const getDeviceName = (): string => {
   if (typeof navigator === 'undefined') return "Security Key";
@@ -276,6 +302,12 @@ export default function App() {
       }
     ];
   });
+  const [boardTitle, setBoardTitle] = useState(() => localStorage.getItem('bolek_board_title') || 'BolekDash');
+  const [publicBoardMode, setPublicBoardMode] = useState(false);
+  const [publicBoardId, setPublicBoardId] = useState<string | null>(() => localStorage.getItem('bolek_public_board_id'));
+  const [isPublishingBoard, setIsPublishingBoard] = useState(false);
+  const [publicBoardUrl, setPublicBoardUrl] = useState(() => localStorage.getItem('bolek_public_board_url') || '');
+  const publicBoardSyncTimerRef = useRef<number | null>(null);
 
   // Role, Subscription, Paywall & Admin State
   const [userRole, setUserRole] = useState<UserRole>(() => {
@@ -458,12 +490,18 @@ export default function App() {
 
   // Keep columns and tabOrder synchronized with localStorage
   useEffect(() => {
+    if (publicBoardMode) return;
     localStorage.setItem('bolek_columns', JSON.stringify(columns));
-  }, [columns]);
+  }, [columns, publicBoardMode]);
 
   useEffect(() => {
     localStorage.setItem('bolek_tab_order', JSON.stringify(tabOrder));
   }, [tabOrder]);
+
+  useEffect(() => {
+    if (publicBoardMode) return;
+    localStorage.setItem('bolek_board_title', boardTitle);
+  }, [boardTitle, publicBoardMode]);
 
   // Tab move handler
   const handleMoveTab = (tabKey: ActiveTab, direction: 'left' | 'right') => {
@@ -739,6 +777,12 @@ export default function App() {
   const [richColor, setRichColor] = useState('#ffffff');
   const [richDestinationColId, setRichDestinationColId] = useState<string>('');
   const [columnPromptOpen, setColumnPromptOpen] = useState(false);
+  const [richRotation, setRichRotation] = useState(0);
+  const [richFontFamily, setRichFontFamily] = useState(NOTE_FONT_FAMILIES[0].value);
+  const [richFontSize, setRichFontSize] = useState('14px');
+  const [richEmoji, setRichEmoji] = useState('');
+  const [richMediaUrl, setRichMediaUrl] = useState('');
+  const [richAttachments, setRichAttachments] = useState<NoteAttachment[]>([]);
   const richEditorRef = useRef<HTMLDivElement>(null);
 
   // Search & Filtering notes states
@@ -756,6 +800,60 @@ export default function App() {
     }, 2500);
   };
 
+  const requireEditableBoard = () => {
+    if (publicBoardMode) {
+      showToast('Public boards are view-only.');
+      return false;
+    }
+    return true;
+  };
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const shareId = url.searchParams.get('publicBoard');
+    if (!shareId) return;
+
+    setPublicBoardMode(true);
+    setPublicBoardId(shareId);
+    setView('desk');
+    setActiveTab('notes');
+
+    const loadBoard = async () => {
+      try {
+        const res = await fetch(`/api/public-boards/${encodeURIComponent(shareId)}`);
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok || !payload?.snapshot) {
+          showToast('Public BolekDash not found.');
+          return;
+        }
+
+        setBoardTitle(payload.title || 'BolekDash');
+        setColumns(Array.isArray(payload.snapshot.columns) ? payload.snapshot.columns : []);
+      } catch (error) {
+        console.error('Failed to load public board', error);
+      }
+    };
+
+    loadBoard();
+    const poll = window.setInterval(loadBoard, 15000);
+    return () => window.clearInterval(poll);
+  }, []);
+
+  useEffect(() => {
+    if (!publicBoardId || publicBoardMode) return;
+    if (publicBoardSyncTimerRef.current) {
+      window.clearTimeout(publicBoardSyncTimerRef.current);
+    }
+    publicBoardSyncTimerRef.current = window.setTimeout(() => {
+      syncPublicBoard(publicBoardId);
+    }, 800);
+    return () => {
+      if (publicBoardSyncTimerRef.current) {
+        window.clearTimeout(publicBoardSyncTimerRef.current);
+      }
+    };
+  }, [columns, boardTitle, publicBoardId, publicBoardMode]);
+
   // Sync editing fields with selected card
   useEffect(() => {
     if (editingCardId) {
@@ -768,11 +866,21 @@ export default function App() {
         setEditTitle(foundCard.title || '');
         setEditContent(foundCard.content || '');
         setEditTags(foundCard.tags ? foundCard.tags.join(', ') : '');
+        setRichRotation(foundCard.rotation || 0);
+        setRichFontFamily(foundCard.fontFamily || NOTE_FONT_FAMILIES[0].value);
+        setRichFontSize(foundCard.fontSize || '14px');
+        setRichEmoji(foundCard.emoji || '');
+        setRichAttachments(foundCard.attachments || []);
       }
     } else {
       setEditTitle('');
       setEditContent('');
       setEditTags('');
+      setRichRotation(0);
+      setRichFontFamily(NOTE_FONT_FAMILIES[0].value);
+      setRichFontSize('14px');
+      setRichEmoji('');
+      setRichAttachments([]);
     }
   }, [editingCardId]);
 
@@ -2208,6 +2316,7 @@ export default function App() {
 
   // Drag & Drop Card re-ordering
   const handleDragStart = (colId: string, cardId: string, e: React.DragEvent) => {
+    if (publicBoardMode) return;
     setDraggedCard({ colId, cardId });
     e.dataTransfer.effectAllowed = 'move';
     e.currentTarget.classList.add('dragging');
@@ -2229,6 +2338,7 @@ export default function App() {
   };
 
   const handleDrop = (targetColId: string, e: React.DragEvent) => {
+    if (publicBoardMode) return;
     e.preventDefault();
     if (!draggedCard) return;
 
@@ -2279,11 +2389,18 @@ export default function App() {
 
   // Add Card note (Rich Modal trigger)
   const handleAddCard = () => {
+    if (!requireEditableBoard()) return;
     setRichEditorCardId(null);
     setRichTitle('');
     setRichContent('<div>Add text here...</div>');
     setRichTags('');
     setRichColor('#ffffff');
+    setRichRotation(0);
+    setRichFontFamily(NOTE_FONT_FAMILIES[0].value);
+    setRichFontSize('14px');
+    setRichEmoji('');
+    setRichMediaUrl('');
+    setRichAttachments([]);
     if (columns.length > 0) {
       setRichDestinationColId(columns[0].id);
       setColumnPromptOpen(true);
@@ -2294,6 +2411,7 @@ export default function App() {
 
   // Add Column (Bolekpad)
   const handleAddColumn = async () => {
+    if (!requireEditableBoard()) return;
     const columnName = await showDialog('prompt', 'Name the new Bolekpad', 'New Dynamic Desk');
     if (!columnName || columnName.trim() === '') return;
 
@@ -2319,6 +2437,7 @@ export default function App() {
 
   // Customize Column (title, cover banners)
   const handleCustomizeColumn = async (colId: string) => {
+    if (!requireEditableBoard()) return;
     const col = columns.find((c) => c.id === colId);
     if (!col) return;
 
@@ -2344,6 +2463,7 @@ export default function App() {
 
   // Move Panel/Column Left or Right
   const handleMoveColumn = (colId: string, direction: 'left' | 'right') => {
+    if (!requireEditableBoard()) return;
     setColumns((prev) => {
       const idx = prev.findIndex((c) => c.id === colId);
       if (idx === -1) return prev;
@@ -2362,6 +2482,7 @@ export default function App() {
 
   // Delete Panel/Column
   const handleDeleteColumn = async (colId: string) => {
+    if (!requireEditableBoard()) return;
     if (columns.length <= 1) {
       showToast('Cannot delete the last remaining panel');
       return;
@@ -2396,6 +2517,7 @@ export default function App() {
 
   // Adjust Column Width
   const handleAdjustColumnWidth = (colId: string, deltaPercent: number) => {
+    if (!requireEditableBoard()) return;
     setColumns((prev) => {
       const idx = prev.findIndex((c) => c.id === colId);
       if (idx === -1) return prev;
@@ -2419,6 +2541,7 @@ export default function App() {
 
   // Save Card Content
   const handleSaveCardContent = (cardId: string, content: string) => {
+    if (!requireEditableBoard()) return;
     setColumns((prev) =>
       prev.map((col) => ({
         ...col,
@@ -2434,6 +2557,7 @@ export default function App() {
 
   // Full Rich Save Card (Title, Content, Tags)
   const handleSaveCardFull = (cardId: string, title: string, content: string, tagsString: string) => {
+    if (!requireEditableBoard()) return;
     const tags = tagsString
       .split(',')
       .map(t => t.trim())
@@ -2454,6 +2578,7 @@ export default function App() {
 
   // Custom Rich Editor Save Handler
   const handleSaveRichEditor = () => {
+    if (!requireEditableBoard()) return;
     const title = richTitle.trim();
     if (!title) {
       showToast('Please add a title first');
@@ -2464,6 +2589,7 @@ export default function App() {
       .split(',')
       .map((t) => t.trim())
       .filter((t) => t !== '');
+    const attachments = richAttachments.filter((item) => item.url.trim());
 
     if (richEditorCardId) {
       // Editing existing card
@@ -2485,7 +2611,12 @@ export default function App() {
           title,
           content,
           tags,
-          color: richColor
+          color: richColor,
+          rotation: richRotation,
+          fontFamily: richFontFamily,
+          fontSize: richFontSize,
+          emoji: richEmoji,
+          attachments,
         };
 
         const targetColId = richDestinationColId || oldColId;
@@ -2536,7 +2667,12 @@ export default function App() {
                   content,
                   tags,
                   color: richColor,
-                  locked: false
+                  locked: false,
+                  rotation: richRotation,
+                  fontFamily: richFontFamily,
+                  fontSize: richFontSize,
+                  emoji: richEmoji,
+                  attachments,
                 }
               ]
             };
@@ -2762,6 +2898,18 @@ export default function App() {
     document.execCommand('insertHTML', false, imgHtml);
   };
 
+  const handleAddRichAttachment = () => {
+    const nextUrl = richMediaUrl.trim();
+    if (!nextUrl) return;
+    setRichAttachments((prev) => [...prev, normalizeAttachment(nextUrl)]);
+    setRichMediaUrl('');
+    showToast('Attached link added to the note');
+  };
+
+  const handleRemoveRichAttachment = (attachmentId: string) => {
+    setRichAttachments((prev) => prev.filter((attachment) => attachment.id !== attachmentId));
+  };
+
   // Rich Editor helper: Clear Formatting
   const clearFormatting = () => {
     document.execCommand('removeFormat', false);
@@ -2769,6 +2917,7 @@ export default function App() {
 
   // Toggle Pinned status
   const handleTogglePin = (cardId: string) => {
+    if (!requireEditableBoard()) return;
     setColumns((prev) =>
       prev.map((col) => ({
         ...col,
@@ -2784,6 +2933,7 @@ export default function App() {
 
   // Lock/Unlock Card
   const handleToggleLock = (cardId: string) => {
+    if (!requireEditableBoard()) return;
     setColumns((prev) =>
       prev.map((col) => ({
         ...col,
@@ -2799,6 +2949,7 @@ export default function App() {
 
   // Color selection
   const handleUpdateCardColor = (cardId: string, color: string) => {
+    if (!requireEditableBoard()) return;
     setColumns((prev) =>
       prev.map((col) => ({
         ...col,
@@ -2814,12 +2965,70 @@ export default function App() {
 
   // Delete Card note
   const handleDeleteCard = (cardId: string) => {
+    if (!requireEditableBoard()) return;
     setColumns((prev) =>
       prev.map((col) => ({
         ...col,
         cards: col.cards.filter((card) => card.id !== cardId)
       }))
     );
+  };
+
+  const buildPublicBoardSnapshot = () => ({
+    title: boardTitle || 'BolekDash',
+    columns,
+    updatedAt: new Date().toISOString(),
+  });
+
+  const syncPublicBoard = async (boardId: string) => {
+    try {
+      const res = await fetch(`/api/public-boards/${encodeURIComponent(boardId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(buildPublicBoardSnapshot()),
+      });
+
+      if (!res.ok) throw new Error('sync failed');
+    } catch (error) {
+      console.warn('Failed to sync public board snapshot', error);
+    }
+  };
+
+  const handlePublishBolekDash = async () => {
+    if (effectiveRole === 'user' && effectivePlan === 'regular' && !featureAccess.futureFeatures) {
+      setPaywallModal({ isOpen: true, featureName: 'notes' });
+      return;
+    }
+
+    setIsPublishingBoard(true);
+    try {
+      const payload = buildPublicBoardSnapshot();
+      const res = await fetch('/api/public-boards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.id || !data?.publicUrl) {
+        throw new Error(data?.error || 'Unable to publish BolekDash.');
+      }
+
+      setPublicBoardId(data.id);
+      setPublicBoardUrl(data.publicUrl);
+      localStorage.setItem('bolek_public_board_id', data.id);
+      localStorage.setItem('bolek_public_board_url', data.publicUrl);
+      try {
+        await navigator.clipboard.writeText(data.publicUrl);
+        showToast('BolekDash public link copied to clipboard.');
+      } catch {
+        showToast('BolekDash published. Copy the link from the toolbar.');
+      }
+    } catch (error) {
+      console.error('Failed to publish board', error);
+      showToast('Unable to publish BolekDash right now.');
+    } finally {
+      setIsPublishingBoard(false);
+    }
   };
 
   if (view === 'login') {
@@ -3329,7 +3538,7 @@ export default function App() {
                   className={`btn-hover-orange flex flex-col items-center gap-1.5 p-2.5 rounded-xl border cursor-pointer text-stone-900 ${activeTab === 'notes' ? 'border-orange-500 bg-orange-50/60 ring-1 ring-orange-500/30' : 'border-stone-200 bg-stone-50'}`}
                 >
                   <span className="material-symbols-outlined !text-xl text-stone-700">sticky_note_2</span>
-                  <span className="text-[10px] font-semibold text-center">Bolek Board</span>
+                  <span className="text-[10px] font-semibold text-center">BolekDash</span>
                 </div>
                 <div 
                   id="app-launch-send" 
@@ -3432,7 +3641,7 @@ export default function App() {
 
           const tabMeta: Record<ActiveTab, { name: string; icon: string }> = {
             dashboard: { name: 'Dashboard', icon: 'dashboard' },
-            notes: { name: 'Bolek Board', icon: 'sticky_note_2' },
+            notes: { name: 'BolekDash', icon: 'sticky_note_2' },
             send: { name: 'StickySend', icon: 'send_and_archive' },
             calendar: { name: 'Calendar', icon: 'calendar_month' },
             profile: { name: 'Profile', icon: 'person' },
@@ -3510,8 +3719,9 @@ export default function App() {
           <button 
             id="subtab-add-bolekpad" 
             onClick={() => { setActiveTab('notes'); handleAddColumn(); }}
-            className="btn-hover-orange flex items-center gap-1 px-3 py-1.5 rounded-md border border-stone-200 bg-white text-xs font-semibold text-stone-600 shadow-sm transition-all duration-150 cursor-pointer active:scale-95"
-            title="Add a new Bolek Pad"
+            disabled={publicBoardMode}
+            className="btn-hover-orange flex items-center gap-1 px-3 py-1.5 rounded-md border border-stone-200 bg-white text-xs font-semibold text-stone-600 shadow-sm transition-all duration-150 cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+            title={publicBoardMode ? 'Public boards are view-only' : 'Add a new Bolek Pad'}
           >
             <span className="material-symbols-outlined !text-sm">view_column</span>
             <span>Add Bolekpad</span>
@@ -3520,8 +3730,9 @@ export default function App() {
           <button 
             id="subtab-add-boleknote" 
             onClick={() => { setActiveTab('notes'); handleAddCard(); }}
-            className="btn-hover-orange flex items-center gap-1 px-3 py-1.5 rounded-md border border-stone-200 bg-white text-xs font-semibold text-stone-600 shadow-sm transition-all duration-150 cursor-pointer active:scale-95"
-            title="Add a new Boleknote"
+            disabled={publicBoardMode}
+            className="btn-hover-orange flex items-center gap-1 px-3 py-1.5 rounded-md border border-stone-200 bg-white text-xs font-semibold text-stone-600 shadow-sm transition-all duration-150 cursor-pointer active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+            title={publicBoardMode ? 'Public boards are view-only' : 'Add a new Boleknote'}
           >
             <span className="material-symbols-outlined !text-sm">add</span>
             <span>Add Boleknote</span>
@@ -3605,6 +3816,18 @@ export default function App() {
           {/* Board Toolbar */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3.5 mb-2.5 border-b border-stone-200/50 select-none">
             <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1.5 bg-white border border-stone-200 rounded-lg px-2.5 py-1.5 shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+                <span className="material-symbols-outlined text-stone-400 !text-xs">dashboard</span>
+                <input
+                  type="text"
+                  value={boardTitle}
+                  onChange={(e) => setBoardTitle(e.target.value)}
+                  disabled={publicBoardMode}
+                  className="bg-transparent border-none text-xs font-bold text-stone-700 focus:outline-none disabled:cursor-not-allowed disabled:text-stone-500 w-28 sm:w-40"
+                  aria-label="BolekDash board title"
+                />
+              </div>
+
               {/* Search input */}
               <div className="relative min-w-[180px] sm:min-w-[240px]">
                 <span className="material-symbols-outlined absolute left-2.5 top-1/2 -translate-y-1/2 text-stone-400 !text-sm">search</span>
@@ -3812,10 +4035,13 @@ export default function App() {
                               className={`card group cursor-pointer ${card.locked ? 'locked' : ''} ${isRegularFullscreen ? 'card-fullscreen' : ''} ${isTabFullscreen ? 'card-tab-fullscreen' : ''}`}
                               style={{ 
                                 backgroundColor: card.color,
-                                minHeight: card.minHeight || undefined
+                                minHeight: card.minHeight || undefined,
+                                transform: `rotate(${card.rotation || 0}deg)`,
+                                fontFamily: card.fontFamily || undefined,
+                                fontSize: card.fontSize || undefined,
                               }}
                               title="Double-click to edit"
-                              draggable={!card.locked}
+                              draggable={!card.locked && !publicBoardMode}
                               onDragStart={(e) => handleDragStart(col.id, card.id, e)}
                               onDragEnd={handleDragEnd}
                               onDragEnter={(e) => handleDragEnter(col.id, originalIdx, e)}
@@ -3824,13 +4050,19 @@ export default function App() {
                                   (e.target as HTMLElement).closest('.card-action-btn') || 
                                   (e.target as HTMLElement).closest('.card-resize-grip')
                                 ) return;
-                                if (card.locked) return;
+                                if (card.locked || publicBoardMode) return;
                                 setRichEditorCardId(card.id);
                                 setRichDestinationColId(col.id);
                                 setRichTitle(card.title || '');
                                 setRichContent(card.content || '');
                                 setRichTags(card.tags ? card.tags.join(', ') : '');
                                 setRichColor(card.color);
+                                setRichRotation(card.rotation || 0);
+                                setRichFontFamily(card.fontFamily || NOTE_FONT_FAMILIES[0].value);
+                                setRichFontSize(card.fontSize || '14px');
+                                setRichEmoji(card.emoji || '');
+                                setRichAttachments(card.attachments || []);
+                                setRichMediaUrl('');
                                 setRichEditorOpen(true);
                               }}
                             >
@@ -3926,10 +4158,54 @@ export default function App() {
                                       {card.title}
                                     </h4>
                                   )}
+                                  {card.emoji && (
+                                    <div className="text-sm mb-1 select-none">{card.emoji}</div>
+                                  )}
                                   <div 
                                     className="card-desc text-xs text-stone-600 leading-relaxed rich-content-rendered break-words overflow-x-auto"
                                     dangerouslySetInnerHTML={{ __html: card.content }}
                                   />
+                                  {card.gifUrl && (
+                                    <img
+                                      src={card.gifUrl}
+                                      alt={card.title || 'Boleknote gif'}
+                                      className="mt-2 w-full rounded-lg border border-stone-200 object-cover"
+                                    />
+                                  )}
+                                  {card.attachments && card.attachments.length > 0 && (
+                                    <div className="mt-2 space-y-2">
+                                      {card.attachments.map((attachment) => (
+                                        <div key={attachment.id} className="rounded-lg border border-stone-200 bg-white/80 overflow-hidden">
+                                          {attachment.kind === 'video' ? (
+                                            <iframe
+                                              src={toEmbedUrl(attachment.url)}
+                                              title={attachment.label || 'Embedded video'}
+                                              className="w-full aspect-video"
+                                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                              allowFullScreen
+                                            />
+                                          ) : attachment.kind === 'image' ? (
+                                            <img
+                                              src={attachment.url}
+                                              alt={attachment.label || 'Attachment'}
+                                              className="w-full max-h-56 object-cover"
+                                              referrerPolicy="no-referrer"
+                                            />
+                                          ) : (
+                                            <a
+                                              href={attachment.url}
+                                              target="_blank"
+                                              rel="noreferrer"
+                                              className="flex items-center gap-2 px-3 py-2 text-[11px] font-semibold text-stone-700 hover:bg-stone-50"
+                                            >
+                                              <span className="material-symbols-outlined !text-sm text-stone-400">link</span>
+                                              <span className="truncate">{attachment.label || attachment.url}</span>
+                                            </a>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
                                   {card.tags && card.tags.length > 0 && (
                                     <div className="flex flex-wrap items-center gap-1 mt-2.5">
                                       {card.tags.map((tag) => (
@@ -5751,8 +6027,37 @@ export default function App() {
                 </div>
               </>
             )}
-
           </div>
+
+          <button
+            type="button"
+            onClick={handlePublishBolekDash}
+            disabled={isPublishingBoard || publicBoardMode}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-stone-900 hover:bg-stone-800 text-white text-xs font-semibold rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+            title={publicBoardMode ? 'Public boards are view-only' : 'Publish BolekDash'}
+          >
+            <span className="material-symbols-outlined !text-sm">share</span>
+            <span>{isPublishingBoard ? 'Publishing...' : 'Publish BolekDash'}</span>
+          </button>
+
+          {publicBoardUrl && !publicBoardMode && (
+            <button
+              type="button"
+              onClick={() => navigator.clipboard.writeText(publicBoardUrl)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white border border-stone-200 text-stone-600 text-xs font-semibold rounded-lg transition hover:bg-stone-50"
+              title="Copy current public link"
+            >
+              <span className="material-symbols-outlined !text-sm">link</span>
+              <span>Copy Link</span>
+            </button>
+          )}
+
+          {publicBoardMode && (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-semibold">
+              <span className="material-symbols-outlined !text-sm">visibility</span>
+              Public view only
+            </span>
+          )}
         </div>
 
         {/* VIEW 3: Boleksend / StickySend App Workspace */}
@@ -8891,6 +9196,96 @@ export default function App() {
                   className="w-full min-h-[220px] bg-stone-50/20 border border-stone-200 rounded-xl p-4 text-xs text-stone-700 outline-none focus:bg-white focus:border-stone-400 focus:ring-1 focus:ring-stone-200/50 transition overflow-y-auto max-h-[350px] leading-relaxed prose prose-stone prose-xs"
                   placeholder={richTitle.trim() ? "Start drafting here... Highlight text to apply custom spacing or font sizes." : "Add title first to edit content..."}
                 />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-bold text-stone-400 uppercase tracking-widest">Font Family</label>
+                  <select
+                    value={richFontFamily}
+                    onChange={(e) => setRichFontFamily(e.target.value)}
+                    className="w-full bg-stone-50 border border-stone-200 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-stone-700 outline-none"
+                  >
+                    {NOTE_FONT_FAMILIES.map((font) => (
+                      <option key={font.value} value={font.value}>{font.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-bold text-stone-400 uppercase tracking-widest">Font Size</label>
+                  <select
+                    value={richFontSize}
+                    onChange={(e) => setRichFontSize(e.target.value)}
+                    className="w-full bg-stone-50 border border-stone-200 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-stone-700 outline-none"
+                  >
+                    {['12px', '14px', '16px', '18px', '20px', '24px'].map((size) => (
+                      <option key={size} value={size}>{size}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-bold text-stone-400 uppercase tracking-widest">Rotation</label>
+                  <input
+                    type="range"
+                    min="-15"
+                    max="15"
+                    step="1"
+                    value={richRotation}
+                    onChange={(e) => setRichRotation(parseInt(e.target.value, 10))}
+                    className="w-full"
+                  />
+                  <div className="text-[10px] text-stone-500 font-mono">{richRotation}°</div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-bold text-stone-400 uppercase tracking-widest">Emoji</label>
+                  <input
+                    type="text"
+                    value={richEmoji}
+                    onChange={(e) => setRichEmoji(e.target.value.slice(0, 2))}
+                    placeholder="✨"
+                    className="w-full bg-stone-50 border border-stone-200 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-stone-700 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-[10px] font-bold text-stone-400 uppercase tracking-widest">Public Link / Media Attachments</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="url"
+                    value={richMediaUrl}
+                    onChange={(e) => setRichMediaUrl(e.target.value)}
+                    placeholder="Paste a YouTube, Cloudinary, image, or file URL"
+                    className="flex-1 bg-stone-50/50 border border-stone-200 rounded-lg px-3 py-2 text-xs text-stone-700 outline-none focus:bg-white focus:border-stone-400 transition"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddRichAttachment}
+                    disabled={!richMediaUrl.trim()}
+                    className="px-3 py-2 rounded-lg bg-stone-900 text-white text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Attach
+                  </button>
+                </div>
+                {richAttachments.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {richAttachments.map((attachment) => (
+                      <button
+                        key={attachment.id}
+                        type="button"
+                        onClick={() => handleRemoveRichAttachment(attachment.id)}
+                        className="inline-flex items-center gap-1.5 text-[10px] font-semibold px-2 py-1 rounded-full border border-stone-200 bg-stone-50 text-stone-600 hover:bg-red-50 hover:border-red-200 hover:text-red-700 transition"
+                        title="Remove attachment"
+                      >
+                        <span className="material-symbols-outlined !text-[10px]">{attachment.kind === 'video' ? 'smart_display' : attachment.kind === 'image' ? 'image' : 'link'}</span>
+                        <span className="max-w-[120px] truncate">{attachment.label || attachment.url}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">

@@ -318,7 +318,7 @@ export const AdminDashboardSettings: React.FC<AdminDashboardSettingsProps> = ({
 
                 <label className="flex items-center justify-between p-3.5 bg-stone-50 border border-stone-200 rounded-xl cursor-pointer">
                   <div>
-                    <span className="font-bold text-stone-900 block">Bolek Board (Notes)</span>
+                    <span className="font-bold text-stone-900 block">BolekDash (Notes)</span>
                     <span className="text-[11px] text-stone-500">Columns & sticky cards</span>
                   </div>
                   <input
