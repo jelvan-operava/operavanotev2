@@ -235,6 +235,28 @@ function buildSecurityEmail(title: string, body: string, ctaLabel?: string, ctaU
   return renderEmailShell(title, title, `<p style="margin:0 0 16px;font-size:16px;line-height:1.7;color:#44403c;">${body}</p>`, ctaLabel, ctaUrl);
 }
 
+const sensitiveActionBuckets = new Map<string, { count: number; resetAt: number }>();
+
+function allowSensitiveAction(req: express.Request, action: string, limit = 5, windowMs = 15 * 60 * 1000) {
+  const ip = req.headers['cf-connecting-ip'] || req.ip || req.socket.remoteAddress || 'unknown';
+  const key = `${action}:${ip}`;
+  const now = Date.now();
+  const bucket = sensitiveActionBuckets.get(key);
+
+  if (!bucket || bucket.resetAt <= now) {
+    sensitiveActionBuckets.set(key, { count: 1, resetAt: now + windowMs });
+    return true;
+  }
+
+  if (bucket.count >= limit) {
+    return false;
+  }
+
+  bucket.count += 1;
+  sensitiveActionBuckets.set(key, bucket);
+  return true;
+}
+
 function escapeHtml(value: string) {
   return value
     .replace(/&/g, "&amp;")
@@ -652,6 +674,10 @@ async function startServer() {
   });
 
   app.post("/api/auth/request-password-reset", async (req, res) => {
+    if (!allowSensitiveAction(req, "request-password-reset")) {
+      return res.status(429).json({ error: "Too many password reset requests. Please wait and try again." });
+    }
+
     const email = String(req.body?.email || "").trim().toLowerCase();
     if (!email) {
       return res.status(400).json({ error: "Email address is required." });
@@ -692,6 +718,10 @@ async function startServer() {
   });
 
   app.post("/api/auth/reset-password", async (req, res) => {
+    if (!allowSensitiveAction(req, "reset-password")) {
+      return res.status(429).json({ error: "Too many password reset attempts. Please wait and try again." });
+    }
+
     const token = String(req.body?.token || "").trim();
     const newPassword = String(req.body?.newPassword || "");
 
