@@ -1,4 +1,4 @@
-import { getPublicBoard, updatePublicBoard } from '../../../_shared/publicBoards';
+import { getPublicBoard, updatePublicBoard } from '../../_shared/publicBoards';
 
 type Env = {
   DB: D1Database;

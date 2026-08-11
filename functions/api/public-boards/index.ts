@@ -1,4 +1,4 @@
-import { createPublicBoard } from '../../../_shared/publicBoards';
+import { createPublicBoard } from '../../_shared/publicBoards';
 
 type Env = {
   DB: D1Database;
