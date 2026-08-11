@@ -1,0 +1,6 @@
+{
+  "name": "Bolek Desk",
+  "description": "An elegant, interactive workspace with draggable cards, a vector canvas supporting flowcharts, diagrams, graphing, and YouTube embeds, plus an integrated calendar scheduler with email reminders.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

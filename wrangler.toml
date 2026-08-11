@@ -1,0 +1,17 @@
+name = "bolek-workspace"
+compatibility_date = "2026-08-10"
+pages_build_output_dir = "./dist"
+
+# Cloudflare D1 Database Binding
+[[d1_databases]]
+binding = "DB"
+database_name = "bolek_db"
+database_id = "YOUR_D1_DATABASE_ID_HERE"
+
+# Cloudflare R2 Storage Bucket Binding (For images and sticky note attachments)
+[[r2_buckets]]
+binding = "STICKY_BUCKET"
+bucket_name = "bolek-sticky-files"
+
+[vars]
+ENVIRONMENT = "production"

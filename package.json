@@ -1,0 +1,26 @@
+{
+  "name": "bolekpad-monorepo",
+  "private": true,
+  "workspaces": [
+    "legacy",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=legacy",
+    "lint": "npm run lint --workspace=legacy",
+    "clean": "node -e \"require('fs').rmSync('dist', {recursive: true, force: true})\"",
+    "build:legacy": "npm run build --workspace=legacy",
+    "copy:dist": "node -e \"require('fs').cpSync('legacy/dist', 'dist', {recursive: true})\"",
+    "build": "npm run clean && npm run build:legacy && npm run copy:dist",
+    "start": "npm run start --workspace=legacy"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "firebase": "^12.16.0",
+    "jsonwebtoken": "^9.0.3"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^3.0.0",
+    "@types/jsonwebtoken": "^9.0.10"
+  }
+}
