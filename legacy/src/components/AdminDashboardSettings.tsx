@@ -365,7 +365,7 @@ export const AdminDashboardSettings: React.FC<AdminDashboardSettingsProps> = ({
                 <label className="flex items-center justify-between p-3.5 bg-orange-50/50 border border-orange-200 rounded-xl cursor-pointer">
                   <div>
                     <span className="font-bold text-stone-900 block">Boleksend Email Suite</span>
-                    <span className="text-[11px] text-stone-500">Bulk emailer & AWS SMTP relay</span>
+                    <span className="text-[11px] text-stone-500">Bulk emailer & Zoho SMTP relay</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] text-stone-500">{featureConfig.send ? 'Allowed for Regulars' : 'Locked for Regulars'}</span>
@@ -381,7 +381,7 @@ export const AdminDashboardSettings: React.FC<AdminDashboardSettingsProps> = ({
                 <label className="flex items-center justify-between p-3.5 bg-orange-50/50 border border-orange-200 rounded-xl cursor-pointer">
                   <div>
                     <span className="font-bold text-stone-900 block">BolekAuth Manager</span>
-                    <span className="text-[11px] text-stone-500">2FA, TOTP vault & passkeys</span>
+                    <span className="text-[11px] text-stone-500">2FA, OTP, TOTP vault & passkeys</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] text-stone-500">{featureConfig.bolekauth ? 'Allowed for Regulars' : 'Locked for Regulars'}</span>

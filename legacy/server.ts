@@ -1,4 +1,5 @@
 import express from "express";
+import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { createServer as createViteServer } from "vite";
@@ -17,6 +18,146 @@ import {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const legalTermsPath = path.join(__dirname, "terms-conditions&privacypolicy");
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function renderLegalPage() {
+  const terms = fs.readFileSync(legalTermsPath, "utf8");
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BolekPad Legal Terms & Privacy Policy</title>
+    <style>
+      :root { color-scheme: light; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #ffffff;
+        color: #111111;
+        line-height: 1.6;
+      }
+      .page {
+        max-width: 980px;
+        margin: 0 auto;
+        padding: 32px 20px 48px;
+      }
+      .panel {
+        background: #ffffff;
+        border: 1px solid #e7e5e4;
+        border-radius: 24px;
+        box-shadow: 0 12px 40px rgba(15, 23, 42, 0.06);
+        overflow: hidden;
+      }
+      .hero {
+        padding: 28px 28px 20px;
+        border-bottom: 1px solid #e7e5e4;
+        background: linear-gradient(180deg, #ffffff 0%, #fafafa 100%);
+      }
+      .hero h1 {
+        margin: 0 0 8px;
+        font-size: clamp(1.6rem, 3vw, 2.2rem);
+      }
+      .hero p {
+        margin: 0;
+        color: #57534e;
+      }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 18px;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid #d6d3d1;
+        border-radius: 999px;
+        padding: 10px 14px;
+        background: #ffffff;
+        color: #111111;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 14px;
+      }
+      .btn.primary {
+        background: #ffffff;
+        color: #111111;
+        border-color: #111111;
+      }
+      .content {
+        padding: 28px;
+      }
+      .summary {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 12px;
+        margin-bottom: 24px;
+      }
+      .summary div {
+        border: 1px solid #e7e5e4;
+        border-radius: 18px;
+        padding: 16px;
+        background: #fafafa;
+      }
+      .summary h2 {
+        margin: 0 0 6px;
+        font-size: 0.95rem;
+      }
+      .summary p { margin: 0; color: #57534e; font-size: 0.92rem; }
+      pre {
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-family: inherit;
+        font-size: 14px;
+        color: #111111;
+      }
+      @media print {
+        .actions { display: none; }
+        body { background: #ffffff; }
+        .page { padding: 0; }
+        .panel { border: 0; border-radius: 0; box-shadow: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="panel">
+        <div class="hero">
+          <p style="margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.12em;color:#78716c;">Accessible without signing in</p>
+          <h1>BolekPad Legal Terms & Privacy Policy</h1>
+          <p>White-themed public policy page with zero-login access, payment acknowledgements, and storage disclosures.</p>
+          <div class="actions">
+            <a class="btn primary" href="/">Back to app</a>
+            <a class="btn" href="/terms" target="_blank" rel="noreferrer">Open in new tab</a>
+            <button class="btn" type="button" onclick="window.print()">Print / Save PDF</button>
+          </div>
+        </div>
+        <div class="content">
+          <div class="summary">
+            <div><h2>Data visibility</h2><p>We use Cloudflare and minimize exposure of user content to the extent technically possible.</p></div>
+            <div><h2>Payments</h2><p>Subscriptions require acknowledgement and are non-refundable except where the law requires otherwise.</p></div>
+            <div><h2>Security</h2><p>Passkeys and two-factor authentication are supported to protect accounts and notifications.</p></div>
+          </div>
+          <pre>${escapeHtml(terms)}</pre>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>`;
+}
 
 async function startServer() {
   const app = express();
@@ -24,6 +165,10 @@ async function startServer() {
 
   // Middleware for parsing JSON
   app.use(express.json());
+
+  app.get(["/legal", "/terms", "/privacy-policy", "/terms-conditions&privacypolicy"], (_req, res) => {
+    res.status(200).type("html").send(renderLegalPage());
+  });
 
   // -------------------------------------------------------------
   // Backend Authentication Endpoints

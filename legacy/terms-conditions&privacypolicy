@@ -33,6 +33,8 @@ You may be required to create an account to access certain features of the Servi
 
 You agree to provide accurate, current, and complete account information and to update that information if it changes. You are responsible for maintaining the confidentiality of your account credentials and for all activity that occurs through your account.
 
+Where enabled, you may use passkeys, authenticator-based two-factor authentication, and email one-time passwords to secure your account. We may send account alerts, login codes, subscription notices, and other operational email messages through a configured transactional email provider such as Zoho SMTP or another provider we designate.
+
 You must promptly notify us at hello@operavaglobal.com if you believe that your account, password, device, or authentication credentials have been compromised, lost, stolen, or used without authorization.
 
 You must not:
@@ -113,6 +115,8 @@ The price, billing frequency, payment terms, available features, taxes, renewal 
 
 Payments may be processed through PayPal, an app store, or another third-party payment provider made available through the Service. Your payment relationship with the applicable payment provider is governed by that provider’s own terms, conditions, and privacy policy.
 
+Before completing a subscription, you must expressly acknowledge that the subscription renews automatically unless cancelled before the renewal date, and that failure to cancel does not create a refund right except where required by applicable law.
+
 Unless otherwise stated at the time of purchase:
 
 (a) subscription fees are charged in advance for each billing period;
@@ -121,7 +125,7 @@ Unless otherwise stated at the time of purchase:
 
 (c) you authorize us or the applicable payment provider to charge your selected payment method for recurring subscription fees and applicable taxes;
 
-(d) fees are non-refundable except where required by applicable law or expressly stated in the applicable refund terms;
+(d) fees are non-refundable except where required by applicable law or expressly stated in the applicable refund terms. If you do not cancel before renewal, the charge remains earned and no post-renewal refund is due unless the law requires one;
 
 (e) you are responsible for all applicable taxes, duties, levies, and similar governmental charges associated with your purchase; and
 
@@ -391,7 +395,7 @@ We may share personal information with carefully selected service providers that
 These providers are permitted to process personal information only as necessary to provide services to us or comply with applicable law, subject to appropriate contractual, technical, and organizational safeguards.
 
 23.2 Cloudflare
-BolekPad uses Cloudflare for certain cloud, network, performance, security, content-delivery, and traffic-management functions.
+BolekPad uses Cloudflare for certain cloud, network, performance, security, content-delivery, and traffic-management functions, including public page delivery, edge security, caching, and protected access to configured resources.
 
 In providing these functions, Cloudflare may process technical data such as IP addresses, request metadata, browser or device information, security event information, logs, and other data transmitted through or necessary to protect and deliver the Service.
 
