@@ -20,6 +20,7 @@ export const PayPalPaymentModal: React.FC<PayPalPaymentModalProps> = ({
   const [processStep, setProcessStep] = useState<string>('');
   const [showDocsInfo, setShowDocsInfo] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>('');
+  const [subscriptionAcknowledged, setSubscriptionAcknowledged] = useState(false);
 
   // Card form state
   const [cardNumber, setCardNumber] = useState('4111 2222 3333 4444');
@@ -46,6 +47,10 @@ export const PayPalPaymentModal: React.FC<PayPalPaymentModalProps> = ({
 
   const handlePay = async () => {
     setErrorMessage('');
+    if (!subscriptionAcknowledged) {
+      setErrorMessage('Please acknowledge the subscription terms before continuing.');
+      return;
+    }
     setIsProcessing(true);
     setProcessStep('Connecting to Cloudflare PayPal checkout...');
 
@@ -296,6 +301,18 @@ export const PayPalPaymentModal: React.FC<PayPalPaymentModalProps> = ({
             </div>
           )}
 
+          <label className="flex items-start gap-3 p-4 rounded-xl border border-stone-200 bg-stone-50 text-[11px] text-stone-700">
+            <input
+              type="checkbox"
+              checked={subscriptionAcknowledged}
+              onChange={(e) => setSubscriptionAcknowledged(e.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-stone-300 text-blue-600 focus:ring-blue-500 cursor-pointer shrink-0"
+            />
+            <span>
+              I acknowledge that this subscription renews automatically unless cancelled before the renewal date, and that refunds are not available after renewal or after I fail to cancel, except where applicable law requires otherwise.
+            </span>
+          </label>
+
         </div>
 
         {/* Action Footer */}
@@ -315,7 +332,7 @@ export const PayPalPaymentModal: React.FC<PayPalPaymentModalProps> = ({
 
             <button
               onClick={handlePay}
-              disabled={isProcessing}
+              disabled={isProcessing || !subscriptionAcknowledged}
               className="px-6 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 active:scale-95 rounded-xl shadow-md transition cursor-pointer flex items-center gap-2 disabled:opacity-50"
             >
               <span className="material-symbols-outlined !text-base">lock</span>
