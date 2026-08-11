@@ -505,7 +505,7 @@ export const BolekStickySend: React.FC<BolekStickySendProps> = ({
                             type="button"
                             onClick={() => {
                               onImportToBoard({ title: msg.title, content: msg.content, color: msg.color });
-                              showToast('Imported sticky to your Bolek Board!');
+                              showToast('Imported sticky to your BolekDash!');
                             }}
                             className="px-2.5 py-1 text-[11px] font-bold bg-stone-900 text-white hover:bg-stone-800 rounded-lg shadow-xs transition flex items-center gap-1 cursor-pointer shrink-0"
                           >

@@ -34,6 +34,19 @@ export interface Boleknote {
   minHeight?: string;
   pinned?: boolean;
   tags?: string[];
+  rotation?: number;
+  fontFamily?: string;
+  fontSize?: string;
+  emoji?: string;
+  gifUrl?: string;
+  attachments?: NoteAttachment[];
+}
+
+export interface NoteAttachment {
+  id: string;
+  url: string;
+  kind: 'image' | 'video' | 'link';
+  label?: string;
 }
 
 export interface Bolekpad {
