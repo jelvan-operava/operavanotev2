@@ -3,12 +3,7 @@ compatibility_date = "2026-08-10"
 pages_build_output_dir = "./dist"
 
 # Cloudflare Pages Functions live in the root /functions folder.
-
-# Cloudflare D1 Database Binding
-[[d1_databases]]
-binding = "DB"
-database_name = "bolek_db"
-database_id = "YOUR_D1_DATABASE_ID_HERE"
+# Bind DB in the Cloudflare Pages dashboard for the target environment.
 
 # Cloudflare R2 Storage Bucket Binding (For images and sticky note attachments)
 [[r2_buckets]]

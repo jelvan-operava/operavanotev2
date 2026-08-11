@@ -71,14 +71,8 @@ To run this application on Cloudflare, you will use:
 3. Click the blue **Create Database** button.
 4. Enter a name for your database, e.g., `bolek_db`.
 5. Click **Create**.
-6. Cloudflare will display a **Database ID** (a string of letters and numbers like `a1b2c3d4-e5f6-...`).
-7. Copy this Database ID and paste it into `wrangler.toml`:
-   ```toml
-   [[d1_databases]]
-   binding = "DB"
-   database_name = "bolek_db"
-   database_id = "YOUR_DATABASE_ID_HERE"
-   ```
+6. In your Pages project, add a **D1 binding** named `DB` and select the `bolek_db` database from your account.
+7. Keep the repository `wrangler.toml` free of placeholder database UUIDs.
 
 ---
 
