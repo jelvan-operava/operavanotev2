@@ -40,3 +40,4 @@ npm run build
 * `DEPLOYMENT_GUIDE.md`: Comprehensive non-technical deployment guide for GitHub and Cloudflare (D1 & R2).
 * `wrangler.toml`: Cloudflare Pages / Workers setup configuration file.
 * `.env.example`: Template for environment variables.
+* `functions/`: Cloudflare Pages Functions for live PayPal subscription checkout.

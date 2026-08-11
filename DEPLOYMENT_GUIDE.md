@@ -11,8 +11,9 @@ This guide provides simple, step-by-step, non-technical instructions for deployi
 4. [Setting up Cloudflare D1 (Database)](#4-setting-up-cloudflare-d1-database)
 5. [Setting up Cloudflare R2 (Storage Bucket)](#5-setting-up-cloudflare-r2-storage-bucket)
 6. [Deploying to Cloudflare Pages](#6-deploying-to-cloudflare-pages)
-7. [Environment Variables Setup](#7-environment-variables-setup)
-8. [Testing & Verification](#8-testing--verification)
+7. [PayPal Subscription Setup](#7-paypal-subscription-setup)
+8. [Environment Variables Setup](#8-environment-variables-setup)
+9. [Testing & Verification](#9-testing--verification)
 
 ---
 
@@ -116,7 +117,19 @@ Cloudflare will now automatically build your site and generate a live link (e.g.
 
 ---
 
-## 7. Environment Variables Setup
+## 7. PayPal Subscription Setup
+
+1. Create your PayPal app credentials in the PayPal developer dashboard.
+2. Add the subscription checkout variables to Cloudflare Pages environment variables:
+   * `PAYPAL_ENV`
+   * `PAYPAL_CLIENT_ID`
+   * `PAYPAL_CLIENT_SECRET`
+3. The app will create and cache the PayPal product and plans in D1 on first checkout.
+4. The plans include a 10-day trial, followed by monthly billing.
+
+---
+
+## 8. Environment Variables Setup
 
 In your Cloudflare Pages Dashboard under **Settings** → **Environment Variables**:
 
@@ -129,16 +142,20 @@ Add the following environment variables (from `.env.example`):
 | `GOOGLE_CLIENT_SECRET` | Google OAuth Secret | Optional |
 | `AWS_ACCESS_KEY_ID` | AWS SES Key for campaign emails | Optional |
 | `AWS_SECRET_ACCESS_KEY` | AWS SES Secret | Optional |
+| `PAYPAL_ENV` | `sandbox` or `live` PayPal environment | Required for payments |
+| `PAYPAL_CLIENT_ID` | PayPal REST app client id | Required for payments |
+| `PAYPAL_CLIENT_SECRET` | PayPal REST app client secret | Required for payments |
 
 ---
 
-## 8. Testing & Verification
+## 9. Testing & Verification
 
 1. Once the deployment finishes, open your live `.pages.dev` URL.
 2. Test the core features:
    * **Dashboard**: Live currency converter refresh rates & widgets.
    * **StickySend**: Send inter-user sticky notes with unread pins, photos, and file attachments.
    * **Admin Settings**: Switch user roles, manage plans, and toggle PayPal sandbox simulation.
-3. Any new push to your `main` branch on GitHub will automatically trigger a new deployment on Cloudflare!
+3. Test PayPal checkout by opening the Pro or Enterprise upgrade flow and confirming the redirect returns with an active subscription and trial.
+4. Any new push to your `main` branch on GitHub will automatically trigger a new deployment on Cloudflare!
 
 🎉 **Congratulations! Your Bolek Workspace is now fully deployed and ready for production!**

@@ -2,6 +2,8 @@ name = "bolek-workspace"
 compatibility_date = "2026-08-10"
 pages_build_output_dir = "./dist"
 
+# Cloudflare Pages Functions live in the root /functions folder.
+
 # Cloudflare D1 Database Binding
 [[d1_databases]]
 binding = "DB"

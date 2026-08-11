@@ -49,6 +49,15 @@ export type ActiveTab = 'dashboard' | 'notes' | 'send' | 'calendar' | 'profile' 
 export type UserRole = 'admin' | 'user';
 export type SubscriptionPlan = 'regular' | 'pro' | 'enterprise';
 
+export interface PayPalSubscriptionState {
+  subscriptionId: string;
+  plan: SubscriptionPlan;
+  status: 'ACTIVE' | 'APPROVAL_PENDING' | 'SUSPENDED' | 'CANCELLED' | 'EXPIRED' | 'UNKNOWN';
+  trialEndsAt?: string | null;
+  payerEmail?: string | null;
+  updatedAt: string;
+}
+
 export interface UserAccount {
   id: string;
   name: string;
@@ -131,4 +140,3 @@ export interface DocSignature {
   x: number;
   y: number;
 }
-

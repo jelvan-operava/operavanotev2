@@ -19,6 +19,7 @@ export const PayPalPaymentModal: React.FC<PayPalPaymentModalProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const [processStep, setProcessStep] = useState<string>('');
   const [showDocsInfo, setShowDocsInfo] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string>('');
 
   // Card form state
   const [cardNumber, setCardNumber] = useState('4111 2222 3333 4444');
@@ -43,24 +44,34 @@ export const PayPalPaymentModal: React.FC<PayPalPaymentModalProps> = ({
     enterprise: 'Enterprise Unlimited',
   };
 
-  const handlePay = () => {
+  const handlePay = async () => {
+    setErrorMessage('');
     setIsProcessing(true);
-    setProcessStep('Connecting to PayPal Sandbox API Gateway...');
+    setProcessStep('Connecting to Cloudflare PayPal checkout...');
 
-    setTimeout(() => {
-      setProcessStep('Validating Developer API Standard (https://developer.paypal.com/llms.txt)...');
-      setTimeout(() => {
-        setProcessStep('Processing Order ID & Subscription Auth Nonce...');
-        setTimeout(() => {
-          setProcessStep('Payment Authorized! Upgrading Account Tier...');
-          setTimeout(() => {
-            setIsProcessing(false);
-            onPaymentSuccess(selectedPlan);
-            onClose();
-          }, 800);
-        }, 800);
-      }, 700);
-    }, 700);
+    try {
+      const response = await fetch('/api/paypal/create-subscription', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          plan: selectedPlan,
+          email: paypalEmail,
+        }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(payload?.error || 'PayPal checkout is not available.');
+      }
+
+      setProcessStep('Redirecting to PayPal to approve the 10-day trial...');
+      localStorage.setItem('bolek_pending_paypal_plan', selectedPlan);
+      localStorage.setItem('bolek_pending_paypal_subscription', payload.subscriptionId);
+      window.location.assign(payload.approvalUrl);
+    } catch (error: any) {
+      setIsProcessing(false);
+      setErrorMessage(error?.message || 'Unable to start PayPal checkout.');
+    }
   };
 
   return (
@@ -79,11 +90,11 @@ export const PayPalPaymentModal: React.FC<PayPalPaymentModalProps> = ({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-bold text-base text-white">PayPal Payment Gateway</h3>
-                <span className="text-[9px] font-mono bg-blue-500/20 text-blue-300 border border-blue-400/30 px-2 py-0.5 rounded-full font-semibold">
-                  Sandbox Active
+                <span className="text-[9px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 px-2 py-0.5 rounded-full font-semibold">
+                  Live Billing
                 </span>
               </div>
-              <p className="text-[11px] text-stone-400">Configure popout dashboard payment & subscription</p>
+              <p className="text-[11px] text-stone-400">Configure subscription checkout with a 10-day trial</p>
             </div>
           </div>
 
@@ -101,7 +112,7 @@ export const PayPalPaymentModal: React.FC<PayPalPaymentModalProps> = ({
         <div className="bg-stone-100 px-5 py-2.5 border-b border-stone-200 text-stone-600 text-xs flex items-center justify-between shrink-0">
           <span className="flex items-center gap-1.5 font-mono text-[11px] text-stone-700">
             <span className="material-symbols-outlined !text-sm text-blue-600">code</span>
-            <span>Standard: <strong className="text-stone-900">developer.paypal.com/llms.txt</strong></span>
+            <span>Standard: <strong className="text-stone-900">PayPal Subscriptions API</strong></span>
           </span>
           <button 
             type="button"
@@ -113,12 +124,18 @@ export const PayPalPaymentModal: React.FC<PayPalPaymentModalProps> = ({
           </button>
         </div>
 
+        {errorMessage && (
+          <div className="mx-5 mt-4 p-3 rounded-xl border border-rose-200 bg-rose-50 text-rose-800 text-xs">
+            {errorMessage}
+          </div>
+        )}
+
         {showDocsInfo && (
           <div className="bg-blue-50/80 p-3.5 border-b border-blue-200 text-[11px] text-blue-900 space-y-1 font-mono shrink-0">
             <p className="font-bold text-blue-950">PayPal Developer Integration Spec:</p>
-            <p>• API Spec endpoint: https://developer.paypal.com/llms.txt</p>
-            <p>• Merchant Sandbox ID: BOLEK-DESK-PAYPAL-SANDBOX-LIVE</p>
-            <p>• Supported flows: Subscriptions API v1, Vault, Instant Capture, Smart Payment Buttons</p>
+            <p>• API flows: live PayPal Subscriptions API with a 10-day trial</p>
+            <p>• Plan tiers: Pro ($9.99/mo) and Enterprise ($29.99/mo)</p>
+            <p>• Charge flow: approval redirect → subscription verification → trial activation</p>
           </div>
         )}
 
@@ -202,7 +219,7 @@ export const PayPalPaymentModal: React.FC<PayPalPaymentModalProps> = ({
               <div className="p-4 bg-blue-50/60 border border-blue-200/80 rounded-xl space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="font-semibold text-blue-900">PayPal Express Checkout</span>
-                  <span className="text-[10px] font-bold bg-blue-200 text-blue-900 px-2 py-0.5 rounded">One-Touch Vault</span>
+                  <span className="text-[10px] font-bold bg-blue-200 text-blue-900 px-2 py-0.5 rounded">10-Day Trial</span>
                 </div>
                 <div>
                   <label className="block text-[11px] font-medium text-stone-600 mb-1">PayPal Account Email</label>
@@ -215,7 +232,7 @@ export const PayPalPaymentModal: React.FC<PayPalPaymentModalProps> = ({
                   />
                 </div>
                 <p className="text-[11px] text-blue-800">
-                  Clicking "Pay with PayPal" below will authenticate instantly against the PayPal Sandbox environment.
+                  Clicking "Pay with PayPal" below creates a real PayPal subscription with a 10-day trial.
                 </p>
               </div>
             ) : (
@@ -302,7 +319,7 @@ export const PayPalPaymentModal: React.FC<PayPalPaymentModalProps> = ({
               className="px-6 py-2.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 active:scale-95 rounded-xl shadow-md transition cursor-pointer flex items-center gap-2 disabled:opacity-50"
             >
               <span className="material-symbols-outlined !text-base">lock</span>
-              <span>{isProcessing ? 'Authorizing...' : `Pay ${planPrices[selectedPlan]} via PayPal`}</span>
+              <span>{isProcessing ? 'Authorizing...' : `Start ${selectedPlan.toUpperCase()} trial via PayPal`}</span>
             </button>
           </div>
         </div>

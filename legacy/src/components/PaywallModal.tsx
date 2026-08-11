@@ -63,7 +63,7 @@ export const PaywallModal: React.FC<PaywallModalProps> = ({
           </div>
 
           <p className="text-xs text-stone-600 leading-relaxed">
-            You are attempting to access <strong className="text-stone-900">{title}</strong>. Regular user accounts are limited to Dashboard, Bolek Board, Calendar, and Profile. Upgrade your subscription via PayPal to instantly unlock Boleksend, BolekAuth, and future premium tools!
+            You are attempting to access <strong className="text-stone-900">{title}</strong>. Regular user accounts are limited to Dashboard, Bolek Board, Calendar, and Profile. Upgrade via PayPal to unlock Boleksend, BolekAuth, and future premium tools with a 10-day trial.
           </p>
 
           {/* Premium Highlights */}
