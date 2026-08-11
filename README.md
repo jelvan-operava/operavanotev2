@@ -1,45 +1,50 @@
-# Bolek Workspace
+# Bolek Desk / Bolekpad
 
-An all-in-one productivity suite featuring interactive workspace boards, live exchange rate currency conversion, StickySend inter-user messaging, calendar scheduling, email campaign management, and admin controls.
+Monorepo for a React/Vite workspace app, an Express auth/API server, Cloudflare Pages Functions, and an optional Cloudflare Workers backend.
 
----
+## What lives here
 
-## ✨ Features
+- `legacy/` — active React app, local Express server, and most UI logic
+- `functions/` — Cloudflare Pages Functions for PayPal and public boards
+- `backend/` — optional Hono/Workers API prototype
 
-* **Bolek Board**: Interactive kanban sticky notes with tag filters, card locking, color customization, and search.
-* **StickySend**: Direct inter-user sticky note messaging with unread pin covers (`received boleknote from @username`), file attachments, photo previews, and adjustable dual-panel layout (BolekInbox / BolekSent).
-* **Live Currency Converter**: Real-time USD/EUR/GBP/JPY exchange rate fetching with swap buttons, currency pair locking, quick amount presets, and visual rate bar graphs.
-* **Admin Dashboard Settings**: Manage registered user accounts, role switching (Admin/Regular User), subscription plans, feature toggles, and PayPal sandbox payments.
-* **Bolek Calendar & Docs & Canvas**: Integrated scheduling, document editing, and whiteboarding utilities.
-* **Public Help Center**: Accessible `/help` page with security, reset, and deployment guidance.
+## Main features
 
----
+- Board / sticky-note workspace
+- StickySend inter-user messaging
+- Calendar reminders
+- Docs editor
+- Canvas / flowchart workspace
+- 2FA / passkey vault
+- Admin and billing controls
+- PayPal subscription checkout
+- Public board sharing
 
-## 📖 Deployment & Setup
-
-For step-by-step, non-technical instructions on deploying this project to **GitHub**, **Cloudflare Pages**, **Cloudflare D1 Database**, and **Cloudflare R2 Storage**, please consult the **[DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md)**.
-
-### Local Development Quick Start
+## Start locally
 
 ```bash
-# Install dependencies
 npm install
-
-# Start local development server
 npm run dev
 ```
 
-Build for production:
+## Build
+
 ```bash
 npm run build
 ```
 
----
+## Canonical docs
 
-## 🛠️ Configuration Files
+- `STRUCTURE.md`
+- `API.md`
+- `SECURITY.md`
+- `DEPLOYMENT.md`
+- `ENVIRONMENT.md`
+- `ACCESSIBILITY.md`
+- `CHANGELOG.md`
 
-* `DEPLOYMENT_GUIDE.md`: Comprehensive non-technical deployment guide for GitHub and Cloudflare (D1 & R2).
-* `wrangler.toml`: Cloudflare Pages / Workers setup configuration file.
-* `.env.example`: Template for environment variables.
-* `functions/`: Cloudflare Pages Functions for live PayPal subscription checkout.
-* `legacy/server.ts`: Local production-style backend with auth, notifications, and password reset routes.
+## Notes
+
+- Most app data is stored in `localStorage` for the legacy UI.
+- Public boards and PayPal subscriptions use D1-backed Cloudflare Functions.
+- The Express server in `legacy/server.ts` implements the login, reset, Google OAuth, Gemini, and Boleksend routes used by the frontend.
