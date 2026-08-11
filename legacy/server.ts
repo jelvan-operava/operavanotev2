@@ -237,24 +237,26 @@ function buildSecurityEmail(title: string, body: string, ctaLabel?: string, ctaU
 
 const sensitiveActionBuckets = new Map<string, { count: number; resetAt: number }>();
 
-function allowSensitiveAction(req: express.Request, action: string, limit = 5, windowMs = 15 * 60 * 1000) {
-  const ip = req.headers['cf-connecting-ip'] || req.ip || req.socket.remoteAddress || 'unknown';
-  const key = `${action}:${ip}`;
-  const now = Date.now();
-  const bucket = sensitiveActionBuckets.get(key);
+function sensitiveRateLimit(action: string, limit = 5, windowMs = 15 * 60 * 1000): express.RequestHandler {
+  return (req, res, next) => {
+    const ip = req.headers['cf-connecting-ip'] || req.ip || req.socket.remoteAddress || 'unknown';
+    const key = `${action}:${ip}`;
+    const now = Date.now();
+    const bucket = sensitiveActionBuckets.get(key);
 
-  if (!bucket || bucket.resetAt <= now) {
-    sensitiveActionBuckets.set(key, { count: 1, resetAt: now + windowMs });
-    return true;
-  }
+    if (!bucket || bucket.resetAt <= now) {
+      sensitiveActionBuckets.set(key, { count: 1, resetAt: now + windowMs });
+      return next();
+    }
 
-  if (bucket.count >= limit) {
-    return false;
-  }
+    if (bucket.count >= limit) {
+      return res.status(429).json({ error: "Too many requests. Please wait and try again." });
+    }
 
-  bucket.count += 1;
-  sensitiveActionBuckets.set(key, bucket);
-  return true;
+    bucket.count += 1;
+    sensitiveActionBuckets.set(key, bucket);
+    return next();
+  };
 }
 
 function escapeHtml(value: string) {
@@ -581,11 +583,7 @@ async function startServer() {
     res.json({ message: "Successfully logged out." });
   });
 
-  app.get("/api/auth/preferences", (req, res) => {
-    if (!allowSensitiveAction(req, "auth-preferences-read", 20, 10 * 60 * 1000)) {
-      return res.status(429).json({ error: "Too many preference lookups. Please wait and try again." });
-    }
-
+  app.get("/api/auth/preferences", sensitiveRateLimit("auth-preferences-read", 20, 10 * 60 * 1000), (req, res) => {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return res.status(401).json({ error: "Authentication token is missing." });
@@ -606,11 +604,7 @@ async function startServer() {
     return res.json({ notificationPreferences: user.notificationPreferences });
   });
 
-  app.post("/api/auth/preferences", (req, res) => {
-    if (!allowSensitiveAction(req, "auth-preferences-write")) {
-      return res.status(429).json({ error: "Too many preference updates. Please wait and try again." });
-    }
-
+  app.post("/api/auth/preferences", sensitiveRateLimit("auth-preferences-write"), (req, res) => {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return res.status(401).json({ error: "Authentication token is missing." });
@@ -681,11 +675,7 @@ async function startServer() {
     }
   });
 
-  app.post("/api/auth/request-password-reset", async (req, res) => {
-    if (!allowSensitiveAction(req, "request-password-reset")) {
-      return res.status(429).json({ error: "Too many password reset requests. Please wait and try again." });
-    }
-
+  app.post("/api/auth/request-password-reset", sensitiveRateLimit("request-password-reset"), async (req, res) => {
     const email = String(req.body?.email || "").trim().toLowerCase();
     if (!email) {
       return res.status(400).json({ error: "Email address is required." });
@@ -725,11 +715,7 @@ async function startServer() {
     return res.json({ message: "If an account exists, a reset link has been sent." });
   });
 
-  app.post("/api/auth/reset-password", async (req, res) => {
-    if (!allowSensitiveAction(req, "reset-password")) {
-      return res.status(429).json({ error: "Too many password reset attempts. Please wait and try again." });
-    }
-
+  app.post("/api/auth/reset-password", sensitiveRateLimit("reset-password"), async (req, res) => {
     const token = String(req.body?.token || "").trim();
     const newPassword = String(req.body?.newPassword || "");
 
