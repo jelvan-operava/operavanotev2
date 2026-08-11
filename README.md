@@ -11,6 +11,7 @@ An all-in-one productivity suite featuring interactive workspace boards, live ex
 * **Live Currency Converter**: Real-time USD/EUR/GBP/JPY exchange rate fetching with swap buttons, currency pair locking, quick amount presets, and visual rate bar graphs.
 * **Admin Dashboard Settings**: Manage registered user accounts, role switching (Admin/Regular User), subscription plans, feature toggles, and PayPal sandbox payments.
 * **Bolek Calendar & Docs & Canvas**: Integrated scheduling, document editing, and whiteboarding utilities.
+* **Public Help Center**: Accessible `/help` page with security, reset, and deployment guidance.
 
 ---
 
@@ -41,3 +42,4 @@ npm run build
 * `wrangler.toml`: Cloudflare Pages / Workers setup configuration file.
 * `.env.example`: Template for environment variables.
 * `functions/`: Cloudflare Pages Functions for live PayPal subscription checkout.
+* `legacy/server.ts`: Local production-style backend with auth, notifications, and password reset routes.
