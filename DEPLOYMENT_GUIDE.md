@@ -142,6 +142,10 @@ Add the following environment variables (from `.env.example`):
 | `GOOGLE_CLIENT_SECRET` | Google OAuth Secret | Optional |
 | `AWS_ACCESS_KEY_ID` | AWS SES Key for campaign emails | Optional |
 | `AWS_SECRET_ACCESS_KEY` | AWS SES Secret | Optional |
+| `JWT_SECRET` | Signed session token secret | Required for production |
+| `ADMIN_BOOTSTRAP_EMAIL` | Initial Cloudflare secret-backed admin email | Recommended |
+| `ADMIN_BOOTSTRAP_PASSWORD_HASH` | Initial admin password hash | Recommended |
+| `ADMIN_BOOTSTRAP_TOTP_SECRET` | Initial admin TOTP secret | Recommended |
 | `PAYPAL_ENV` | `sandbox` or `live` PayPal environment | Required for payments |
 | `PAYPAL_CLIENT_ID` | PayPal REST app client id | Required for payments |
 | `PAYPAL_CLIENT_SECRET` | PayPal REST app client secret | Required for payments |

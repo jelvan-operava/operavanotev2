@@ -156,6 +156,14 @@ const authenticatePasskey = async (registeredPasskeys: any[]) => {
   return { success: true };
 };
 
+type EmailNotificationSettings = {
+  securityEmails: boolean;
+  loginEmails: boolean;
+  welcomeEmail: boolean;
+  passwordResetEmails: boolean;
+  productEmails: boolean;
+};
+
 const ComplianceFooter = () => {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -176,9 +184,19 @@ const ComplianceFooter = () => {
         target="_blank"
         rel="noopener noreferrer"
         aria-label="Open compliance and privacy information"
-        className="fixed bottom-2 left-1/2 -translate-x-1/2 text-[10px] text-stone-700 hover:text-stone-900 transition z-[9000] cursor-pointer bg-white px-3 py-1.5 rounded-full shadow-xs border border-stone-200"
+        className="fixed bottom-2 left-1/2 -translate-x-[calc(50%+72px)] text-[10px] text-stone-700 hover:text-stone-900 transition z-[9000] cursor-pointer bg-white px-3 py-1.5 rounded-full shadow-xs border border-stone-200"
       >
         Legal & Privacy
+      </a>
+
+      <a
+        href="/help"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Open public help center"
+        className="fixed bottom-2 left-1/2 translate-x-[calc(-50%+72px)] text-[10px] text-stone-700 hover:text-stone-900 transition z-[9000] cursor-pointer bg-white px-3 py-1.5 rounded-full shadow-xs border border-stone-200"
+      >
+        Help Center
       </a>
 
       {isOpen && (
@@ -525,6 +543,26 @@ export default function App() {
   const [profileName, setProfileName] = useState(() => localStorage.getItem('bolek_profile_name') || 'Jelvan Ricolcol');
   const [profileEmail, setProfileEmail] = useState(() => localStorage.getItem('bolek_profile_email') || 'rjelvanbaloaloa@gmail.com');
   const [profilePicture, setProfilePicture] = useState(() => localStorage.getItem('bolek_profile_picture') || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=250&q=80');
+  const [emailNotifications, setEmailNotifications] = useState<EmailNotificationSettings>(() => {
+    try {
+      const saved = localStorage.getItem('bolek_email_notifications');
+      return saved ? JSON.parse(saved) : {
+        securityEmails: true,
+        loginEmails: true,
+        welcomeEmail: true,
+        passwordResetEmails: true,
+        productEmails: false
+      };
+    } catch {
+      return {
+        securityEmails: true,
+        loginEmails: true,
+        welcomeEmail: true,
+        passwordResetEmails: true,
+        productEmails: false
+      };
+    }
+  });
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [mfaSecretKey] = useState('BOLEKPAD-MFA-XR92L-P981');
   const [mfaBackupCodes] = useState(['8391-0182', '5529-8812', '9012-7721', '6618-2901']);
@@ -551,6 +589,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('bolek_passkeys', JSON.stringify(passkeys));
   }, [passkeys]);
+
+  useEffect(() => {
+    localStorage.setItem('bolek_email_notifications', JSON.stringify(emailNotifications));
+  }, [emailNotifications]);
 
   const [biometricModal, setBiometricModal] = useState<{
     isOpen: boolean;
@@ -1202,7 +1244,7 @@ export default function App() {
       if (savedToken) {
         try {
           const res = await fetch('/api/auth/me', {
-            headers: { 'Authorization': `Bearer ${savedToken}` }
+            headers: { 'Authorization': 'Bearer ' + savedToken }
           });
           if (res.ok) {
             const data = await res.json();
@@ -1210,6 +1252,9 @@ export default function App() {
               setProfileName(data.user.name);
               setProfileEmail(data.user.email);
               if (data.user.picture) setProfilePicture(data.user.picture);
+              if (data.user.notificationPreferences) {
+                setEmailNotifications(data.user.notificationPreferences);
+              }
               if (window.location.pathname === '/' || window.location.pathname === '/login') {
                 window.history.pushState({}, '', '/desk');
               }
@@ -1287,6 +1332,9 @@ export default function App() {
         setProfileName(data.user.name);
         setProfileEmail(data.user.email);
         if (data.user.picture) setProfilePicture(data.user.picture);
+        if (data.user.notificationPreferences) {
+          setEmailNotifications(data.user.notificationPreferences);
+        }
         localStorage.setItem('bolek_profile_name', data.user.name);
         localStorage.setItem('bolek_profile_email', data.user.email);
       }
@@ -1314,7 +1362,7 @@ export default function App() {
       try {
         await fetch('/api/auth/logout', {
           method: 'POST',
-          headers: { 'Authorization': `Bearer ${savedToken}` }
+          headers: { 'Authorization': 'Bearer ' + savedToken }
         });
       } catch (e) {}
     }
@@ -1506,7 +1554,11 @@ export default function App() {
   useEffect(() => {
     const handleOAuthMessage = (event: MessageEvent) => {
       const origin = event.origin;
-      if (!origin.endsWith('.run.app') && !origin.includes('localhost') && !origin.includes('127.0.0.1')) {
+      const allowedOrigins = new Set([
+        window.location.origin,
+        (window as any).__BOLEK_APP_ORIGIN__,
+      ]);
+      if (!allowedOrigins.has(origin) && !origin.includes('localhost') && !origin.includes('127.0.0.1')) {
         return;
       }
       
@@ -8498,13 +8550,52 @@ export default function App() {
                       onChange={(e) => setProfileEmail(e.target.value)}
                     />
                   </div>
+                  <div className="space-y-2 rounded-xl border border-stone-200 bg-stone-50/70 p-3">
+                    <div>
+                      <h4 className="text-[11px] font-semibold uppercase tracking-wider text-stone-500">Email Notifications</h4>
+                      <p className="text-[11px] text-stone-400">Control account, login, and reset notifications.</p>
+                    </div>
+                    {[
+                      { key: 'securityEmails', label: 'Security alerts' },
+                      { key: 'loginEmails', label: 'Login alerts' },
+                      { key: 'welcomeEmail', label: 'Welcome email' },
+                      { key: 'passwordResetEmails', label: 'Password reset emails' },
+                      { key: 'productEmails', label: 'Product updates' },
+                    ].map((item) => (
+                      <label key={item.key} className="flex items-center justify-between gap-3 text-xs text-stone-700">
+                        <span>{item.label}</span>
+                        <input
+                          type="checkbox"
+                          checked={emailNotifications[item.key as keyof EmailNotificationSettings]}
+                          onChange={(e) => setEmailNotifications((prev) => ({ ...prev, [item.key]: e.target.checked } as EmailNotificationSettings))}
+                          className="h-4 w-4 rounded border-stone-300 text-stone-900 focus:ring-stone-900"
+                        />
+                      </label>
+                    ))}
+                  </div>
                   <button 
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
+                      const authToken = localStorage.getItem('bolek_auth_token');
+                      try {
+                        if (authToken) {
+                          await fetch('/api/auth/preferences', {
+                            method: 'POST',
+                            headers: {
+                              'Content-Type': 'application/json',
+                              ...(authToken ? { Authorization: 'Bearer ' + authToken } : {})
+                            },
+                            body: JSON.stringify(emailNotifications)
+                          });
+                        }
+                      } catch (error) {
+                        console.warn('Failed to persist email notification settings', error);
+                      }
                       localStorage.setItem('bolek_profile_name', profileName);
                       localStorage.setItem('bolek_profile_email', profileEmail);
                       localStorage.setItem('bolek_profile_picture', profilePicture);
-                      showAlert("Profile & Avatar saved successfully!");
+                      localStorage.setItem('bolek_email_notifications', JSON.stringify(emailNotifications));
+                      showAlert("Profile, avatar, and email notifications saved successfully!");
                     }}
                     className="w-full bg-stone-900 text-white rounded-lg py-2 text-xs font-semibold hover:bg-stone-800 transition cursor-pointer"
                   >

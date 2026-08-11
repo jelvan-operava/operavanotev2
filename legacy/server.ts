@@ -1,6 +1,7 @@
 import express from "express";
 import fs from "fs";
 import path from "path";
+import crypto from "crypto";
 import { fileURLToPath } from "url";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
@@ -13,12 +14,250 @@ import {
   verifyAuthToken,
   updateUserPasskeys,
   updateUserProfile,
-  changeUserPassword
+  changeUserPassword,
+  updateUserNotificationPreferences,
+  setUserLastLogin,
+  markWelcomeEmailSent,
+  setPasswordResetToken,
+  resetUserPasswordWithToken
 } from "./src/server/authStore.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const legalTermsPath = path.join(__dirname, "terms-conditions&privacypolicy");
+const REPO_URL = "https://github.com/jelvan-operava/operavanotev2";
+
+function getAppUrl() {
+  return process.env.APP_URL || "http://localhost:3000";
+}
+
+function createAppLink(pathname: string) {
+  return new URL(pathname, getAppUrl()).toString();
+}
+
+function renderEmailShell(title: string, heading: string, bodyHtml: string, ctaLabel?: string, ctaUrl?: string) {
+  const repoLink = REPO_URL;
+  const logo = "B";
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${escapeHtml(title)}</title>
+  </head>
+  <body style="margin:0;background:#f8f6f2;font-family:Inter,Arial,sans-serif;color:#1c1917;">
+    <div style="max-width:680px;margin:0 auto;padding:32px 16px;">
+      <div style="background:#fff;border:1px solid #e7e5e4;border-radius:24px;overflow:hidden;box-shadow:0 18px 50px rgba(15,23,42,.08);">
+        <div style="padding:24px 28px;background:linear-gradient(180deg,#fff 0%,#fafaf9 100%);border-bottom:1px solid #e7e5e4;">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <div style="width:44px;height:44px;border-radius:14px;background:#111827;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;">${logo}</div>
+            <div>
+              <div style="font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:#78716c;">Bolek Desk</div>
+              <h1 style="margin:4px 0 0;font-size:24px;line-height:1.2;">${escapeHtml(heading)}</h1>
+            </div>
+          </div>
+        </div>
+        <div style="padding:28px;">
+          ${bodyHtml}
+          ${ctaLabel && ctaUrl ? `<div style="margin-top:28px;"><a href="${ctaUrl}" style="display:inline-block;background:#111827;color:#fff;text-decoration:none;padding:12px 18px;border-radius:999px;font-weight:700;">${escapeHtml(ctaLabel)}</a></div>` : ""}
+        </div>
+        <div style="padding:18px 28px;border-top:1px solid #e7e5e4;background:#fafaf9;font-size:12px;line-height:1.6;color:#57534e;">
+          <p style="margin:0 0 8px;">If you did not expect this email, secure your account immediately and contact support.</p>
+          <p style="margin:0;">Public docs & source: <a href="${repoLink}" style="color:#111827;">${repoLink}</a></p>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>`;
+}
+
+function renderPublicHelpCenter() {
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bolek Desk Help Center</title>
+    <style>
+      :root { color-scheme: light; }
+      * { box-sizing: border-box; }
+      body { margin:0; font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background:#fafaf9; color:#1c1917; line-height:1.6; }
+      .wrap { max-width: 1040px; margin: 0 auto; padding: 32px 18px 56px; }
+      .hero, .card { background:#fff; border:1px solid #e7e5e4; border-radius:24px; box-shadow:0 14px 40px rgba(15,23,42,.06); }
+      .hero { padding: 28px; margin-bottom: 20px; }
+      .grid { display:grid; grid-template-columns: repeat(auto-fit,minmax(240px,1fr)); gap:16px; }
+      .card { padding: 20px; }
+      a { color:#111827; }
+      .pill { display:inline-flex; padding:6px 10px; border-radius:999px; background:#f5f5f4; font-size:12px; }
+      .actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:18px; }
+      .btn { display:inline-flex; align-items:center; justify-content:center; padding:10px 14px; border-radius:999px; text-decoration:none; font-weight:700; border:1px solid #d6d3d1; color:#111827; background:#fff; }
+      .btn.primary { background:#111827; color:#fff; border-color:#111827; }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <section class="hero">
+        <span class="pill">Public · no login required</span>
+        <h1 style="margin:12px 0 8px;font-size:clamp(2rem,4vw,3rem);line-height:1.1;">Bolek Desk Help Center</h1>
+        <p style="margin:0;max-width:760px;color:#57534e;">Find account security guidance, password reset steps, email notification controls, and production deployment notes.</p>
+        <div class="actions">
+          <a class="btn primary" href="/">Back to app</a>
+          <a class="btn" href="${REPO_URL}" target="_blank" rel="noreferrer">Source repository</a>
+        </div>
+      </section>
+      <section class="grid">
+        <article class="card"><h2>Account security</h2><p>Use passkeys or 2FA, keep your password unique, and review login notices regularly.</p></article>
+        <article class="card"><h2>Password reset</h2><p>Request a reset email, open the secure link, and set a new password before the token expires.</p></article>
+        <article class="card"><h2>Email alerts</h2><p>Control login, security, reset, and product emails from account settings.</p></article>
+        <article class="card"><h2>Cloudflare safety</h2><p>Use secrets for admin bootstrap, set a strong JWT secret, and keep app origins exact in OAuth messages.</p></article>
+      </section>
+    </main>
+  </body>
+</html>`;
+}
+
+function renderResetPasswordPage(token = "") {
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Reset your Bolek Desk password</title>
+    <style>
+      body { margin:0; font-family: Inter, system-ui, sans-serif; background:#fafaf9; color:#1c1917; }
+      .wrap { min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px; }
+      .card { width:min(560px,100%); background:#fff; border:1px solid #e7e5e4; border-radius:24px; box-shadow:0 18px 50px rgba(15,23,42,.08); padding:28px; }
+      label { display:block; font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; margin:16px 0 6px; color:#57534e; }
+      input { width:100%; padding:12px 14px; border:1px solid #d6d3d1; border-radius:14px; font-size:14px; }
+      button { margin-top:20px; background:#111827; color:#fff; border:0; border-radius:999px; padding:12px 18px; font-weight:700; cursor:pointer; }
+      .muted { color:#57534e; font-size:14px; }
+      .row { display:flex; gap:12px; }
+      .row > div { flex:1; }
+      a { color:#111827; }
+      .msg { margin-top:16px; padding:12px 14px; border-radius:14px; background:#f5f5f4; display:none; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <h1 style="margin-top:0;">Reset password</h1>
+        <p class="muted">Use the reset token from your email. If you do not have one, request a reset below.</p>
+        <form id="requestForm">
+          <label for="email">Request reset email</label>
+          <input id="email" type="email" placeholder="name@example.com" />
+          <button type="submit">Send reset link</button>
+        </form>
+        <hr style="margin:24px 0;border:0;border-top:1px solid #e7e5e4;" />
+        <form id="resetForm">
+          <label for="token">Reset token</label>
+          <input id="token" type="text" value="${escapeHtml(token)}" placeholder="Paste token from email" />
+          <label for="password">New password</label>
+          <input id="password" type="password" placeholder="New password" />
+          <label for="confirm">Confirm password</label>
+          <input id="confirm" type="password" placeholder="Confirm password" />
+          <button type="submit">Update password</button>
+        </form>
+        <div id="msg" class="msg"></div>
+        <p style="margin-top:18px;font-size:12px;color:#78716c;">Source repo: <a href="${REPO_URL}" target="_blank" rel="noreferrer">${REPO_URL}</a></p>
+      </div>
+    </div>
+    <script>
+      const msg = document.getElementById('msg');
+      const show = (text, ok=true) => {
+        msg.style.display = 'block';
+        msg.style.background = ok ? '#ecfdf5' : '#fef2f2';
+        msg.style.color = ok ? '#166534' : '#991b1b';
+        msg.textContent = text;
+      };
+      document.getElementById('requestForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email = document.getElementById('email').value.trim();
+        const res = await fetch('/api/auth/request-password-reset', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ email })
+        });
+        const data = await res.json().catch(() => ({}));
+        show(data.message || 'If the email exists, a reset link has been sent.');
+      });
+      document.getElementById('resetForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const token = document.getElementById('token').value.trim();
+        const password = document.getElementById('password').value;
+        const confirm = document.getElementById('confirm').value;
+        if (password !== confirm) return show('Passwords do not match.', false);
+        const res = await fetch('/api/auth/reset-password', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ token, newPassword: password })
+        });
+        const data = await res.json().catch(() => ({}));
+        show(data.message || 'Password updated.');
+      });
+    </script>
+  </body>
+</html>`;
+}
+
+async function sendPlatformEmail(to: string, subject: string, html: string, text: string) {
+  const accessKeyId = process.env.AWS_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
+  const region = process.env.AWS_REGION || "us-east-1";
+  const senderEmail = process.env.AWS_SES_SENDER || process.env.BOLEKSEND_SENDER_EMAIL || "noreply@bolekpad.com";
+
+  if (!accessKeyId || !secretAccessKey) {
+    console.log(`[email-skip] ${subject} -> ${to}`);
+    return { sent: false, messageId: null };
+  }
+
+  const { SESClient, SendEmailCommand } = await import("@aws-sdk/client-ses");
+  const client = new SESClient({
+    region,
+    credentials: { accessKeyId, secretAccessKey }
+  });
+
+  const result = await client.send(new SendEmailCommand({
+    Destination: { ToAddresses: [to] },
+    Message: {
+      Body: {
+        Html: { Charset: "UTF-8", Data: html },
+        Text: { Charset: "UTF-8", Data: text }
+      },
+      Subject: { Charset: "UTF-8", Data: subject }
+    },
+    Source: senderEmail
+  }));
+
+  return { sent: true, messageId: result.MessageId || null };
+}
+
+function buildSecurityEmail(title: string, body: string, ctaLabel?: string, ctaUrl?: string) {
+  return renderEmailShell(title, title, `<p style="margin:0 0 16px;font-size:16px;line-height:1.7;color:#44403c;">${body}</p>`, ctaLabel, ctaUrl);
+}
+
+const sensitiveActionBuckets = new Map<string, { count: number; resetAt: number }>();
+
+function sensitiveRateLimit(action: string, limit = 5, windowMs = 15 * 60 * 1000): express.RequestHandler {
+  return (req, res, next) => {
+    const ip = req.headers['cf-connecting-ip'] || req.ip || req.socket.remoteAddress || 'unknown';
+    const key = `${action}:${ip}`;
+    const now = Date.now();
+    const bucket = sensitiveActionBuckets.get(key);
+
+    if (!bucket || bucket.resetAt <= now) {
+      sensitiveActionBuckets.set(key, { count: 1, resetAt: now + windowMs });
+      return next();
+    }
+
+    if (bucket.count >= limit) {
+      return res.status(429).json({ error: "Too many requests. Please wait and try again." });
+    }
+
+    bucket.count += 1;
+    sensitiveActionBuckets.set(key, bucket);
+    return next();
+  };
+}
 
 function escapeHtml(value: string) {
   return value
@@ -170,6 +409,15 @@ async function startServer() {
     res.status(200).type("html").send(renderLegalPage());
   });
 
+  app.get(["/help", "/help-center"], (_req, res) => {
+    res.status(200).type("html").send(renderPublicHelpCenter());
+  });
+
+  app.get("/reset-password", (req, res) => {
+    const token = typeof req.query.token === "string" ? req.query.token : "";
+    res.status(200).type("html").send(renderResetPasswordPage(token));
+  });
+
   // -------------------------------------------------------------
   // Backend Authentication Endpoints
   // -------------------------------------------------------------
@@ -205,7 +453,10 @@ async function startServer() {
           picture: user.picture || "",
           totpSecret: user.totpSecret,
           passkeys: user.passkeys,
-          createdAt: user.createdAt
+          createdAt: user.createdAt,
+          notificationPreferences: user.notificationPreferences,
+          lastLoginAt: user.lastLoginAt || null,
+          welcomeEmailSentAt: user.welcomeEmailSentAt || null
         }
       });
     } catch (err: any) {
@@ -234,6 +485,41 @@ async function startServer() {
       }
 
       const token = generateAuthToken(user);
+      const updatedUser = setUserLastLogin(user.id) || user;
+
+      if (updatedUser.notificationPreferences?.welcomeEmail && !updatedUser.welcomeEmailSentAt) {
+        try {
+          await sendPlatformEmail(
+            updatedUser.email,
+            "Welcome to Bolek Desk",
+            renderEmailShell(
+              "Welcome to Bolek Desk",
+              "Welcome aboard",
+              `<p style="margin:0 0 16px;font-size:16px;line-height:1.7;color:#44403c;">Hi ${escapeHtml(updatedUser.name)}, your first successful sign-in is complete.</p><p style="margin:0 0 16px;font-size:16px;line-height:1.7;color:#44403c;">You can change email notification preferences in account settings anytime.</p>`,
+              "Open Bolek Desk",
+              `${getAppUrl()}/desk`
+            ),
+            `Hi ${updatedUser.name}, your first successful sign-in is complete.`
+          );
+          markWelcomeEmailSent(updatedUser.id);
+        } catch (emailError) {
+          console.warn("Welcome email failed:", emailError);
+        }
+      } else if (updatedUser.notificationPreferences?.loginEmails) {
+        try {
+          await sendPlatformEmail(
+            updatedUser.email,
+            "New sign-in to Bolek Desk",
+            buildSecurityEmail(
+              "New sign-in detected",
+              `We detected a successful login to your Bolek Desk account (${escapeHtml(updatedUser.email)}). If this was not you, change your password immediately and review your passkeys.`
+            ),
+            `We detected a successful login to your Bolek Desk account (${updatedUser.email}).`
+          );
+        } catch (emailError) {
+          console.warn("Login alert email failed:", emailError);
+        }
+      }
 
       return res.json({
         message: "Login successful.",
@@ -245,7 +531,10 @@ async function startServer() {
           picture: user.picture || "",
           totpSecret: user.totpSecret,
           passkeys: user.passkeys,
-          createdAt: user.createdAt
+          createdAt: updatedUser.createdAt,
+          notificationPreferences: updatedUser.notificationPreferences,
+          lastLoginAt: updatedUser.lastLoginAt || null,
+          welcomeEmailSentAt: updatedUser.welcomeEmailSentAt || null
         }
       });
     } catch (err: any) {
@@ -281,7 +570,10 @@ async function startServer() {
         picture: user.picture || "",
         totpSecret: user.totpSecret,
         passkeys: user.passkeys,
-        createdAt: user.createdAt
+        createdAt: user.createdAt,
+        notificationPreferences: user.notificationPreferences,
+        lastLoginAt: user.lastLoginAt || null,
+        welcomeEmailSentAt: user.welcomeEmailSentAt || null
       }
     });
   });
@@ -289,6 +581,55 @@ async function startServer() {
   // User Logout
   app.post("/api/auth/logout", (req, res) => {
     res.json({ message: "Successfully logged out." });
+  });
+
+  app.get("/api/auth/preferences", sensitiveRateLimit("auth-preferences-read", 20, 10 * 60 * 1000), (req, res) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Authentication token is missing." });
+    }
+
+    const token = authHeader.split(" ")[1];
+    const decoded = verifyAuthToken(token);
+
+    if (!decoded || !decoded.userId) {
+      return res.status(401).json({ error: "Invalid or expired session." });
+    }
+
+    const user = findUserById(decoded.userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found." });
+    }
+
+    return res.json({ notificationPreferences: user.notificationPreferences });
+  });
+
+  app.post("/api/auth/preferences", sensitiveRateLimit("auth-preferences-write"), (req, res) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Authentication token is missing." });
+    }
+
+    const token = authHeader.split(" ")[1];
+    const decoded = verifyAuthToken(token);
+
+    if (!decoded || !decoded.userId) {
+      return res.status(401).json({ error: "Invalid or expired session." });
+    }
+
+    const updatedUser = updateUserNotificationPreferences(decoded.userId, {
+      securityEmails: !!req.body?.securityEmails,
+      loginEmails: !!req.body?.loginEmails,
+      welcomeEmail: !!req.body?.welcomeEmail,
+      passwordResetEmails: !!req.body?.passwordResetEmails,
+      productEmails: !!req.body?.productEmails,
+    });
+
+    if (!updatedUser) {
+      return res.status(404).json({ error: "User not found." });
+    }
+
+    return res.json({ notificationPreferences: updatedUser.notificationPreferences });
   });
 
   // Change Password
@@ -312,10 +653,98 @@ async function startServer() {
 
     try {
       await changeUserPassword(decoded.userId, oldPassword, newPassword);
+      const updatedUser = findUserById(decoded.userId);
+      if (updatedUser?.notificationPreferences?.securityEmails) {
+        try {
+          await sendPlatformEmail(
+            updatedUser.email,
+            "Your Bolek Desk password changed",
+            buildSecurityEmail(
+              "Password updated",
+              "Your Bolek Desk password was changed successfully. If you did not make this change, reset your password immediately and review your account security."
+            ),
+            "Your Bolek Desk password was changed successfully."
+          );
+        } catch (emailError) {
+          console.warn("Password change email failed:", emailError);
+        }
+      }
       return res.json({ message: "Password changed successfully." });
     } catch (err: any) {
       return res.status(400).json({ error: err.message || "Failed to change password." });
     }
+  });
+
+  app.post("/api/auth/request-password-reset", sensitiveRateLimit("request-password-reset"), async (req, res) => {
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    if (!email) {
+      return res.status(400).json({ error: "Email address is required." });
+    }
+
+    const user = findUserByEmail(email);
+    if (!user) {
+      return res.json({ message: "If an account exists, a reset link has been sent." });
+    }
+
+    if (!user.notificationPreferences?.passwordResetEmails) {
+      return res.json({ message: "Password reset notifications are disabled for this account." });
+    }
+
+    const token = crypto.randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    setPasswordResetToken(user.id, token, expiresAt);
+
+    const resetUrl = `${getAppUrl()}/reset-password?token=${encodeURIComponent(token)}`;
+    try {
+      await sendPlatformEmail(
+        user.email,
+        "Reset your Bolek Desk password",
+        renderEmailShell(
+          "Reset your password",
+          "Password reset request",
+          `<p style="margin:0 0 16px;font-size:16px;line-height:1.7;color:#44403c;">We received a request to reset the password for ${escapeHtml(user.email)}.</p><p style="margin:0 0 16px;font-size:16px;line-height:1.7;color:#44403c;">This link expires in 60 minutes.</p><p style="margin:0 0 16px;font-size:16px;line-height:1.7;color:#44403c;">If you did not request this, ignore this message.</p>`,
+          "Reset password now",
+          resetUrl
+        ),
+        `We received a request to reset the password for ${user.email}. Use this link within 60 minutes: ${resetUrl}`
+      );
+    } catch (emailError) {
+      console.warn("Password reset email failed:", emailError);
+    }
+
+    return res.json({ message: "If an account exists, a reset link has been sent." });
+  });
+
+  app.post("/api/auth/reset-password", sensitiveRateLimit("reset-password"), async (req, res) => {
+    const token = String(req.body?.token || "").trim();
+    const newPassword = String(req.body?.newPassword || "");
+
+    if (!token || newPassword.length < 6) {
+      return res.status(400).json({ error: "Valid reset token and a new password (min 6 characters) are required." });
+    }
+
+    const user = await resetUserPasswordWithToken(token, newPassword);
+    if (!user) {
+      return res.status(400).json({ error: "Reset token is invalid or expired." });
+    }
+
+    if (user.notificationPreferences?.securityEmails) {
+      try {
+        await sendPlatformEmail(
+          user.email,
+          "Your Bolek Desk password was reset",
+          buildSecurityEmail(
+            "Password reset complete",
+            "Your password has been reset successfully. If you did not perform this action, contact support immediately and review your passkeys."
+          ),
+          "Your Bolek Desk password has been reset successfully."
+        );
+      } catch (emailError) {
+        console.warn("Password reset completion email failed:", emailError);
+      }
+    }
+
+    return res.json({ message: "Password updated successfully. You can now sign in with your new password." });
   });
 
   // Sync Passkeys
@@ -340,6 +769,18 @@ async function startServer() {
     const updatedUser = updateUserPasskeys(decoded.userId, passkeys);
     if (!updatedUser) {
       return res.status(404).json({ error: "User not found." });
+    }
+
+    if (updatedUser.notificationPreferences?.securityEmails) {
+      sendPlatformEmail(
+        updatedUser.email,
+        "Your Bolek Desk passkeys changed",
+        buildSecurityEmail(
+          "Passkeys updated",
+          "Your saved passkeys were updated. If this wasn't you, remove all passkeys and change your password immediately."
+        ),
+        "Your saved passkeys were updated."
+      ).catch((emailError) => console.warn("Passkey update email failed:", emailError));
     }
 
     return res.json({ passkeys: updatedUser.passkeys });
@@ -418,6 +859,7 @@ async function startServer() {
       }
 
       const profile = await profileResponse.json();
+      const targetOrigin = new URL(getAppUrl()).origin;
 
       // Send postMessage success to parent and close popup
       res.send(`
@@ -444,7 +886,7 @@ async function startServer() {
                       name: ${JSON.stringify(profile.name || profile.given_name || "Google User")},
                       picture: ${JSON.stringify(profile.picture || "")}
                     }
-                  }, '*');
+                  }, ${JSON.stringify(targetOrigin)});
                   setTimeout(() => {
                     try { window.close(); } catch(e) {}
                   }, 500);
