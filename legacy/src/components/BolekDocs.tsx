@@ -529,12 +529,7 @@ export default function BolekDocs({ showAlert }: { showAlert: (msg: string) => v
         ? extractPdfText(rawResult as ArrayBuffer)
         : String(rawResult || '');
       const importedText = isHtml
-        ? (() => {
-            if (typeof DOMParser === 'undefined') return text.replaceAll('<', '').replaceAll('>', '');
-            const parsed = new DOMParser().parseFromString(text, 'text/html');
-            parsed.querySelectorAll('script,style').forEach((node) => node.remove());
-            return parsed.body.textContent || parsed.body.innerText || '';
-          })()
+        ? text.replaceAll('<', '').replaceAll('>', '')
         : text;
 
       if (!importedText.trim()) {

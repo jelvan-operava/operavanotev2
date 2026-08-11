@@ -49,9 +49,7 @@ const wrapText = (text: string, maxChars: number) => {
 
 const markdownToPlainText = (content: string) => {
   const stripHtml = (value: string) => {
-    if (typeof DOMParser === 'undefined') return value.replaceAll('<', '').replaceAll('>', '');
-    const parsed = new DOMParser().parseFromString(value, 'text/html');
-    return parsed.body.textContent || parsed.body.innerText || '';
+    return value.replaceAll('<', '').replaceAll('>', '');
   };
 
   return content
