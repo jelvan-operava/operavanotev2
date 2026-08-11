@@ -582,6 +582,10 @@ async function startServer() {
   });
 
   app.get("/api/auth/preferences", (req, res) => {
+    if (!allowSensitiveAction(req, "auth-preferences-read", 20, 10 * 60 * 1000)) {
+      return res.status(429).json({ error: "Too many preference lookups. Please wait and try again." });
+    }
+
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return res.status(401).json({ error: "Authentication token is missing." });
@@ -603,6 +607,10 @@ async function startServer() {
   });
 
   app.post("/api/auth/preferences", (req, res) => {
+    if (!allowSensitiveAction(req, "auth-preferences-write")) {
+      return res.status(429).json({ error: "Too many preference updates. Please wait and try again." });
+    }
+
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return res.status(401).json({ error: "Authentication token is missing." });
