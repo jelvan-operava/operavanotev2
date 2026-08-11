@@ -530,11 +530,10 @@ export default function BolekDocs({ showAlert }: { showAlert: (msg: string) => v
         : String(rawResult || '');
       const importedText = isHtml
         ? (() => {
-            if (typeof document === 'undefined') return text;
-            const wrapper = document.createElement('div');
-            wrapper.innerHTML = text;
-            wrapper.querySelectorAll('script,style').forEach((node) => node.remove());
-            return wrapper.textContent || wrapper.innerText || '';
+            if (typeof DOMParser === 'undefined') return text.replaceAll('<', '').replaceAll('>', '');
+            const parsed = new DOMParser().parseFromString(text, 'text/html');
+            parsed.querySelectorAll('script,style').forEach((node) => node.remove());
+            return parsed.body.textContent || parsed.body.innerText || '';
           })()
         : text;
 
