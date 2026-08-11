@@ -1,4 +1,4 @@
-# Bolek Workspace 🚀
+# Bolek Workspace
 
 An all-in-one productivity suite featuring interactive workspace boards, live exchange rate currency conversion, StickySend inter-user messaging, calendar scheduling, email campaign management, and admin controls.
 
