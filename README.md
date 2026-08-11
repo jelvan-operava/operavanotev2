@@ -14,6 +14,7 @@ Monorepo for a React/Vite workspace app, an Express auth/API server, Cloudflare 
 - StickySend inter-user messaging
 - Calendar reminders
 - Docs editor
+- Imore office suite with signatures, exports, and document conversion
 - Canvas / flowchart workspace
 - 2FA / passkey vault
 - Admin and billing controls

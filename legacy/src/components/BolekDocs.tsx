@@ -62,12 +62,14 @@ import {
 import { 
   exportAsWord, 
   exportAsPages, 
+  exportAsHtml,
+  exportAsPdf,
   convertMarkdownToHtml 
 } from '../lib/docUtils';
 
 export default function BolekDocs({ showAlert }: { showAlert: (msg: string) => void }) {
   // Document Configuration & States
-  const [docTitle, setDocTitle] = useState('Bolek Workspace Charter');
+  const [docTitle, setDocTitle] = useState('Imore Studio Document');
   const [docSubtitle, setDocSubtitle] = useState('An AI-Powered Collaboration Framework');
   const [docAuthor, setDocAuthor] = useState('Rjelvan Baloaloa');
   const [content, setContent] = useState(() => {
@@ -138,6 +140,11 @@ export default function BolekDocs({ showAlert }: { showAlert: (msg: string) => v
       scale: 100
     }
   ]);
+  const [imageToolFileName, setImageToolFileName] = useState('imore-image');
+  const [imageToolUrl, setImageToolUrl] = useState('');
+  const [imageToolWidth, setImageToolWidth] = useState<number>(1200);
+  const [imageToolHeight, setImageToolHeight] = useState<number>(800);
+  const [imageToolQuality, setImageToolQuality] = useState<number>(0.92);
   const [footnotes, setFootnotes] = useState<DocFootnote[]>([
     { id: 'fn-1', number: 1, text: 'Refer to ISO/IEC 19505 for unified modeling conventions.' },
     { id: 'fn-2', number: 2, text: 'Empirical data sourced from Bolek research analytics (2026).' }
@@ -489,13 +496,60 @@ export default function BolekDocs({ showAlert }: { showAlert: (msg: string) => v
     const file = e.target.files?.[0];
     if (!file) return;
 
+    const extractPdfText = (arrayBuffer: ArrayBuffer) => {
+      const binary = Array.from(new Uint8Array(arrayBuffer)).map((byte) => String.fromCharCode(byte)).join('');
+      const textChunks = [
+        ...binary.matchAll(/\(([^()]*(?:\\.[^()]*)*)\)\s*Tj/g),
+        ...binary.matchAll(/\[([^\]]+)\]\s*TJ/g),
+      ].map((match) => match[1]);
+
+      const cleaned = textChunks
+        .map((chunk) => chunk
+          .replace(/\\([\\()nrtbf])/g, (_m, escaped) => {
+            if (escaped === 'n') return '\n';
+            if (escaped === 'r') return '\n';
+            if (escaped === 't') return '\t';
+            if (escaped === 'b') return '\b';
+            if (escaped === 'f') return '\f';
+            return escaped;
+          })
+          .replace(/\s+/g, ' ')
+          .trim())
+        .filter(Boolean);
+
+      return cleaned.length > 0 ? cleaned.join('\n') : '';
+    };
+
     const reader = new FileReader();
     reader.onload = (event) => {
-      const text = event.target?.result as string;
-      setContent(text);
+      const isPdf = /\.pdf$/i.test(file.name);
+      const isHtml = /\.html?$/i.test(file.name);
+      const rawResult = event.target?.result;
+      const text = isPdf
+        ? extractPdfText(rawResult as ArrayBuffer)
+        : String(rawResult || '');
+      const importedText = isHtml
+        ? text
+            .replace(/<script[\s\S]*?<\/script>/gi, '')
+            .replace(/<style[\s\S]*?<\/style>/gi, '')
+            .replace(/<\/(p|div|h[1-6]|li|tr)>/gi, '\n')
+            .replace(/<br\s*\/?>/gi, '\n')
+            .replace(/<[^>]+>/g, '')
+        : text;
+
+      if (!importedText.trim()) {
+        showAlert(`Imported "${file.name}" but couldn't decode readable text.`);
+        return;
+      }
+
+      setContent(importedText);
       showAlert(`Successfully loaded file "${file.name}" into the editor workspace.`);
     };
-    reader.readAsText(file);
+    if (/\.pdf$/i.test(file.name)) {
+      reader.readAsArrayBuffer(file);
+    } else {
+      reader.readAsText(file);
+    }
   };
 
   // Document calculations & styling
@@ -816,6 +870,110 @@ export default function BolekDocs({ showAlert }: { showAlert: (msg: string) => v
     showAlert('Document compiled and downloaded with Apple Pages (.pages) file format wrapper! Pages will import and format automatically.');
   };
 
+  const handleExportHtml = () => {
+    exportAsHtml({
+      docTitle,
+      docSubtitle,
+      docAuthor,
+      content,
+      paperSize,
+      orientation,
+      marginTop,
+      marginLeft,
+      lineSpacing,
+      textAlign,
+      fontSize,
+      fontFamily,
+      showCoverPage,
+      footnotes
+    });
+    showAlert('Document exported as standalone HTML.');
+  };
+
+  const handleExportPdf = () => {
+    exportAsPdf({
+      docTitle,
+      docSubtitle,
+      docAuthor,
+      content,
+      paperSize,
+      orientation,
+      marginTop,
+      marginLeft,
+      lineSpacing,
+      textAlign,
+      fontSize,
+      fontFamily,
+      showCoverPage,
+      footnotes
+    });
+    showAlert('Document exported as a print-ready PDF.');
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result || '');
+      setImageToolUrl(dataUrl);
+      setImageToolFileName(file.name.replace(/\.[^.]+$/, ''));
+      const img = new Image();
+      img.onload = () => {
+        setImageToolWidth(img.naturalWidth || 1200);
+        setImageToolHeight(img.naturalHeight || 800);
+      };
+      img.src = dataUrl;
+      showAlert(`Loaded ${file.name} into the image converter.`);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const downloadConvertedImage = async (mimeType: 'image/webp' | 'image/png', resize = false) => {
+    if (!imageToolUrl) {
+      showAlert('Upload a PNG, JPG, or WebP image first.');
+      return;
+    }
+
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = imageToolUrl;
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error('Image load failed'));
+    });
+
+    const canvas = document.createElement('canvas');
+    canvas.width = resize ? Math.max(1, Math.round(imageToolWidth)) : img.naturalWidth;
+    canvas.height = resize ? Math.max(1, Math.round(imageToolHeight)) : img.naturalHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      showAlert('Canvas conversion is unavailable in this browser.');
+      return;
+    }
+
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob((nextBlob) => resolve(nextBlob), mimeType, imageToolQuality);
+    });
+
+    if (!blob) {
+      showAlert('Unable to convert the image.');
+      return;
+    }
+
+    const suffix = resize ? `${canvas.width}x${canvas.height}` : 'converted';
+    const extension = mimeType === 'image/webp' ? 'webp' : 'png';
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${imageToolFileName}-${suffix}.${extension}`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+    showAlert(`Image exported as ${extension.toUpperCase()}${resize ? ` at ${canvas.width}×${canvas.height}` : ''}.`);
+  };
+
   return (
     <div className="w-full h-full flex flex-col bg-stone-150/40 overflow-hidden" id="view-docs">
       
@@ -824,6 +982,7 @@ export default function BolekDocs({ showAlert }: { showAlert: (msg: string) => v
         <div className="flex items-center gap-3">
           <FileText className="w-5 h-5 text-orange-500" />
           <div className="flex items-center gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-orange-400 hidden md:inline">Imore</span>
             <input 
               type="text" 
               value={docTitle} 
@@ -831,7 +990,7 @@ export default function BolekDocs({ showAlert }: { showAlert: (msg: string) => v
               className="bg-transparent border-0 font-bold text-sm text-white focus:ring-0 focus:outline-none focus:bg-stone-800 px-2 py-0.5 rounded w-56 md:w-80 cursor-pointer"
               title="Click to rename document title"
             />
-            <span className="text-xs text-stone-400 font-mono hidden md:inline">· Saved to Local Cloud</span>
+            <span className="text-xs text-stone-400 font-mono hidden md:inline">· Imore Office Suite</span>
           </div>
         </div>
         
@@ -1493,7 +1652,10 @@ export default function BolekDocs({ showAlert }: { showAlert: (msg: string) => v
           
           {/* File Exporters */}
           <div className="bg-white rounded-xl border border-stone-200 p-3 space-y-2.5 shadow-2xs">
-            <span className="text-[10px] font-extrabold text-stone-800 uppercase tracking-wider block font-sans border-b border-stone-100 pb-1">Export Document</span>
+            <span className="text-[10px] font-extrabold text-stone-800 uppercase tracking-wider block font-sans border-b border-stone-100 pb-1">Document Converter</span>
+            <p className="text-[9px] text-stone-500 leading-snug">
+              Word, Pages, PDF, HTML, and image conversion tools for a premium office workflow.
+            </p>
             
             <div className="grid grid-cols-1 gap-1.5">
               <button
@@ -1518,6 +1680,30 @@ export default function BolekDocs({ showAlert }: { showAlert: (msg: string) => v
                 <div className="flex items-center gap-2">
                   <FileText className="w-4 h-4 text-orange-600" />
                   <span>Export as Pages</span>
+                </div>
+                <ChevronDown className="w-3.5 h-3.5 text-stone-400 rotate-270" />
+              </button>
+              <button
+                type="button"
+                onClick={handleExportPdf}
+                className="w-full flex items-center justify-between px-3 py-2 text-xs font-bold border border-stone-200 bg-stone-50 hover:bg-stone-100 rounded-lg text-stone-800 transition cursor-pointer"
+                title="Export the current document as PDF"
+              >
+                <div className="flex items-center gap-2">
+                  <FileDown className="w-4 h-4 text-red-600" />
+                  <span>Export as PDF</span>
+                </div>
+                <ChevronDown className="w-3.5 h-3.5 text-stone-400 rotate-270" />
+              </button>
+              <button
+                type="button"
+                onClick={handleExportHtml}
+                className="w-full flex items-center justify-between px-3 py-2 text-xs font-bold border border-stone-200 bg-stone-50 hover:bg-stone-100 rounded-lg text-stone-800 transition cursor-pointer"
+                title="Export the current document as HTML"
+              >
+                <div className="flex items-center gap-2">
+                  <BookOpen className="w-4 h-4 text-emerald-600" />
+                  <span>Export as HTML</span>
                 </div>
                 <ChevronDown className="w-3.5 h-3.5 text-stone-400 rotate-270" />
               </button>
@@ -1575,12 +1761,49 @@ export default function BolekDocs({ showAlert }: { showAlert: (msg: string) => v
 
           {/* Import File block */}
           <div className="bg-white rounded-xl border border-stone-200 p-3 space-y-1.5 shadow-2xs">
-            <span className="text-[10px] font-extrabold text-stone-800 uppercase tracking-wider block font-sans">Import Document Draft</span>
+            <span className="text-[10px] font-extrabold text-stone-800 uppercase tracking-wider block font-sans">Import Draft Text</span>
             <label className="flex items-center justify-center gap-2 border border-dashed border-stone-300 rounded-lg p-2 bg-stone-50/50 hover:bg-stone-50 cursor-pointer transition text-stone-600">
               <Upload className="w-3.5 h-3.5 text-stone-400" />
-              <span className="text-[10px] font-bold text-stone-700">Choose MD, TXT File</span>
-              <input type="file" accept=".txt,.md" onChange={handleImportFile} className="hidden" />
+              <span className="text-[10px] font-bold text-stone-700">Choose MD, TXT, HTML, PDF</span>
+              <input type="file" accept=".txt,.md,.html,.pdf" onChange={handleImportFile} className="hidden" />
             </label>
+          </div>
+
+          <div className="bg-white rounded-xl border border-stone-200 p-3 space-y-2.5 shadow-2xs">
+            <span className="text-[10px] font-extrabold text-stone-800 uppercase tracking-wider block font-sans border-b border-stone-100 pb-1">Image Converter</span>
+            <label className="flex items-center justify-center gap-2 border border-dashed border-stone-300 rounded-lg p-2 bg-stone-50/50 hover:bg-stone-50 cursor-pointer transition text-stone-600">
+              <ImageIcon className="w-3.5 h-3.5 text-stone-400" />
+              <span className="text-[10px] font-bold text-stone-700">Upload PNG / JPG / WebP</span>
+              <input type="file" accept="image/png,image/jpeg,image/webp" onChange={handleImageUpload} className="hidden" />
+            </label>
+
+            {imageToolUrl && (
+              <div className="space-y-2">
+                <img src={imageToolUrl} alt="Image preview" className="w-full max-h-32 object-contain rounded-lg border border-stone-200 bg-stone-50" />
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="text-[9px] font-bold text-stone-500 uppercase">
+                    Width
+                    <input type="number" value={imageToolWidth} onChange={(e) => setImageToolWidth(parseInt(e.target.value) || 1)} className="mt-1 w-full rounded border border-stone-200 px-2 py-1 text-xs" />
+                  </label>
+                  <label className="text-[9px] font-bold text-stone-500 uppercase">
+                    Height
+                    <input type="number" value={imageToolHeight} onChange={(e) => setImageToolHeight(parseInt(e.target.value) || 1)} className="mt-1 w-full rounded border border-stone-200 px-2 py-1 text-xs" />
+                  </label>
+                </div>
+                <label className="block text-[9px] font-bold text-stone-500 uppercase">
+                  Quality
+                  <input type="range" min="0.5" max="1" step="0.01" value={imageToolQuality} onChange={(e) => setImageToolQuality(parseFloat(e.target.value))} className="mt-2 w-full accent-orange-600" />
+                </label>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => downloadConvertedImage('image/webp')} className="flex-1 px-2 py-1.5 rounded-lg bg-stone-900 text-white text-[10px] font-bold cursor-pointer">
+                    PNG → WebP
+                  </button>
+                  <button type="button" onClick={() => downloadConvertedImage('image/webp', true)} className="flex-1 px-2 py-1.5 rounded-lg bg-orange-600 text-white text-[10px] font-bold cursor-pointer">
+                    Resize & Export
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
         </div>

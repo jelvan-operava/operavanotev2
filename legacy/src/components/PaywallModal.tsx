@@ -19,6 +19,7 @@ export const PaywallModal: React.FC<PaywallModalProps> = ({
     bolekauth: 'BolekAuth Manager (2FA & Biometrics)',
     send: 'Boleksend Email Suite & Automation',
     notes: 'BolekDash Premium Publishing',
+    imore: 'Imore Document Studio',
     future: 'Advanced Enterprise Module',
   };
 
@@ -64,7 +65,7 @@ export const PaywallModal: React.FC<PaywallModalProps> = ({
           </div>
 
           <p className="text-xs text-stone-600 leading-relaxed">
-            You are attempting to access <strong className="text-stone-900">{title}</strong>. Regular user accounts are limited to Dashboard, BolekDash, Calendar, and Profile. Upgrade via PayPal to unlock Boleksend, BolekAuth, and future premium tools with a 10-day trial.
+            You are attempting to access <strong className="text-stone-900">{title}</strong>. Regular user accounts are limited to Dashboard, BolekDash, Calendar, and Profile. Upgrade via PayPal to unlock Boleksend, BolekAuth, Imore, and other future premium tools with a 10-day trial.
           </p>
 
           {/* Premium Highlights */}

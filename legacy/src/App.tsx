@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Bolekpad, Boleknote, ActiveTab, ThemeDialogConfig, UserAccount, FeatureAccessConfig, SubscriptionPlan, UserRole, NoteAttachment } from './types';
 import BolekCalendar from './components/BolekCalendar';
 import BolekAuth from './components/BolekAuth';
+import BolekDocs from './components/BolekDocs';
 import { BolekDashboard } from './components/BolekDashboard';
 import { PaywallModal } from './components/PaywallModal';
 import { PayPalPaymentModal } from './components/PayPalPaymentModal';
@@ -486,6 +487,7 @@ export default function App() {
   const [openTabs, setOpenTabs] = useState<Record<ActiveTab, boolean>>({
     dashboard: true,
     notes: true,
+    imore: false,
     send: false,
     calendar: false,
     profile: false,
@@ -499,12 +501,24 @@ export default function App() {
       try {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          if (!parsed.includes('dashboard')) return ['dashboard', ...parsed];
-          return parsed;
+          const normalized = parsed.filter((tab): tab is ActiveTab => [
+            'dashboard',
+            'notes',
+            'imore',
+            'send',
+            'calendar',
+            'profile',
+            'bolekauth',
+            'admin',
+          ].includes(tab));
+          if (!normalized.includes('dashboard')) return ['dashboard', ...normalized];
+          if (!normalized.includes('notes')) return ['dashboard', 'notes', ...normalized.filter((tab) => tab !== 'dashboard' && tab !== 'notes')];
+          if (!normalized.includes('imore')) return ['dashboard', 'notes', 'imore', ...normalized.filter((tab) => tab !== 'dashboard' && tab !== 'notes')];
+          return normalized;
         }
       } catch (e) {}
     }
-    return ['dashboard', 'notes', 'send', 'calendar', 'profile', 'bolekauth', 'admin'];
+    return ['dashboard', 'notes', 'imore', 'send', 'calendar', 'profile', 'bolekauth', 'admin'];
   });
 
   // Keep columns and tabOrder synchronized with localStorage
@@ -1875,7 +1889,7 @@ export default function App() {
     // Intercept regular user access to restricted tabs
     const isRegular = effectiveRole === 'user' && effectivePlan === 'regular';
     if (isRegular) {
-      if ((tab === 'send' && !featureAccess.send) || (tab === 'bolekauth' && !featureAccess.bolekauth)) {
+      if ((tab === 'send' && !featureAccess.send) || (tab === 'bolekauth' && !featureAccess.bolekauth) || (tab === 'imore' && !featureAccess.futureFeatures)) {
         setPaywallModal({ isOpen: true, featureName: tab });
         return;
       }
@@ -3579,6 +3593,19 @@ export default function App() {
                   <span className="text-[10px] font-semibold text-center">BolekDash</span>
                 </div>
                 <div 
+                  id="app-launch-imore" 
+                  onClick={() => handleAppLaunch('imore')}
+                  className={`btn-hover-orange flex flex-col items-center gap-1.5 p-2.5 rounded-xl border cursor-pointer text-stone-900 relative ${activeTab === 'imore' ? 'border-orange-500 bg-orange-50/60 ring-1 ring-orange-500/30' : 'border-stone-200 bg-stone-50'}`}
+                >
+                  {effectiveRole === 'user' && effectivePlan === 'regular' && !featureAccess.futureFeatures && (
+                    <span className="absolute top-1 right-1 bg-amber-500 text-stone-950 font-bold text-[8px] px-1 py-0.2 rounded-full flex items-center gap-0.5">
+                      <span className="material-symbols-outlined !text-[10px]">lock</span> PRO
+                    </span>
+                  )}
+                  <span className="material-symbols-outlined !text-xl text-stone-700">description</span>
+                  <span className="text-[10px] font-semibold text-center">Imore</span>
+                </div>
+                <div 
                   id="app-launch-send" 
                   onClick={() => handleAppLaunch('send')}
                   className={`btn-hover-orange flex flex-col items-center gap-1.5 p-2.5 rounded-xl border cursor-pointer text-stone-900 relative ${activeTab === 'send' ? 'border-orange-500 bg-orange-50/60 ring-1 ring-orange-500/30' : 'border-stone-200 bg-stone-50'}`}
@@ -3680,6 +3707,7 @@ export default function App() {
           const tabMeta: Record<ActiveTab, { name: string; icon: string }> = {
             dashboard: { name: 'Dashboard', icon: 'dashboard' },
             notes: { name: 'BolekDash', icon: 'sticky_note_2' },
+            imore: { name: 'Imore', icon: 'description' },
             send: { name: 'StickySend', icon: 'send_and_archive' },
             calendar: { name: 'Calendar', icon: 'calendar_month' },
             profile: { name: 'Profile', icon: 'person' },
@@ -6098,7 +6126,12 @@ export default function App() {
           )}
         </div>
 
-        {/* VIEW 3: Boleksend / StickySend App Workspace */}
+        {/* VIEW 3: Imore Office */}
+        <div id="view-imore" className={`w-full h-full flex-1 flex flex-col bg-white border border-stone-200 rounded-lg overflow-hidden ${activeTab === 'imore' ? 'flex' : 'hidden'}`}>
+          <BolekDocs showAlert={showAlert} />
+        </div>
+
+        {/* VIEW 4: Boleksend / StickySend App Workspace */}
         <div id="view-send" className={`w-full h-full flex-1 flex flex-col bg-white border border-stone-200 rounded-lg overflow-hidden ${activeTab === 'send' ? 'flex' : 'hidden'}`}>
           
           {/* Header Bar with View Switcher */}

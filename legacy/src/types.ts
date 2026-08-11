@@ -57,7 +57,7 @@ export interface Bolekpad {
   cards: Boleknote[];
 }
 
-export type ActiveTab = 'dashboard' | 'notes' | 'send' | 'calendar' | 'profile' | 'bolekauth' | 'admin';
+export type ActiveTab = 'dashboard' | 'notes' | 'imore' | 'send' | 'calendar' | 'profile' | 'bolekauth' | 'admin';
 
 export type UserRole = 'admin' | 'user';
 export type SubscriptionPlan = 'regular' | 'pro' | 'enterprise';

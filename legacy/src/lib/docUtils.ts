@@ -1,6 +1,142 @@
 // Bolek Docs Utility Helper for compilation and file exports
 import { DocFootnote } from '../types';
 
+const downloadBlob = (blob: Blob, filename: string): void => {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 0);
+};
+
+const getPaperDimensions = (paperSize: string, orientation: string) => {
+  const size = paperSize === 'a4'
+    ? { width: 595.28, height: 841.89 }
+    : paperSize === 'legal'
+      ? { width: 612, height: 1008 }
+      : paperSize === 'a5'
+        ? { width: 419.53, height: 595.28 }
+        : paperSize === 'executive'
+          ? { width: 522, height: 756 }
+          : { width: 612, height: 792 };
+
+  return orientation === 'landscape'
+    ? { width: size.height, height: size.width }
+    : size;
+};
+
+const escapePdfText = (value: string) => value.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+
+const wrapText = (text: string, maxChars: number) => {
+  const words = text.split(/\s+/).filter(Boolean);
+  const lines: string[] = [];
+  let current = '';
+
+  words.forEach((word) => {
+    const next = current ? `${current} ${word}` : word;
+    if (next.length > maxChars && current) {
+      lines.push(current);
+      current = word;
+    } else {
+      current = next;
+    }
+  });
+
+  if (current) lines.push(current);
+  return lines;
+};
+
+const markdownToPlainText = (content: string) => {
+  return content
+    .split('\n')
+    .map((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return '';
+      if (/^#{1,6}\s+/.test(trimmed)) return trimmed.replace(/^#{1,6}\s+/, '').toUpperCase();
+      if (/^[-*]\s+/.test(trimmed)) return `• ${trimmed.replace(/^[-*]\s+/, '')}`;
+      if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+        return trimmed
+          .split('|')
+          .slice(1, -1)
+          .map((cell) => cell.trim())
+          .filter(Boolean)
+          .join('  ');
+      }
+      return trimmed
+        .replace(/\*\*(.*?)\*\*/g, '$1')
+        .replace(/\*(.*?)\*/g, '$1')
+        .replace(/__(.*?)__/g, '$1')
+        .replace(/_(.*?)_/g, '$1')
+        .replace(/\[\^(\d+)\]/g, '[$1]')
+        .replace(/<br\s*\/?>/gi, '\n')
+        .replace(/<[^>]+>/g, '');
+    })
+    .join('\n');
+};
+
+const createTextPdfBlob = (title: string, lines: string[], paperSize: string, orientation: string) => {
+  const { width, height } = getPaperDimensions(paperSize, orientation);
+  const margin = 48;
+  const fontSize = 12;
+  const lineHeight = 14;
+  const maxChars = Math.max(40, Math.floor((width - margin * 2) / 6));
+  const linesPerPage = Math.max(24, Math.floor((height - margin * 2) / lineHeight));
+
+  const wrappedLines = lines.flatMap((line) => (line ? wrapText(line, maxChars) : ['']));
+  const pages: string[][] = [];
+  for (let i = 0; i < wrappedLines.length; i += linesPerPage) {
+    pages.push(wrappedLines.slice(i, i + linesPerPage));
+  }
+  if (pages.length === 0) pages.push(['']);
+
+  const objects: string[] = [];
+  const pageCount = pages.length;
+  const pageObjectNumbers = pages.map((_, idx) => 4 + idx * 2);
+  const contentObjectNumbers = pages.map((_, idx) => 5 + idx * 2);
+
+  objects[1] = '<< /Type /Catalog /Pages 2 0 R >>';
+  objects[2] = `<< /Type /Pages /Kids [${pageObjectNumbers.map((n) => `${n} 0 R`).join(' ')}] /Count ${pageCount} >>`;
+  objects[3] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>';
+
+  pages.forEach((pageLines, idx) => {
+    const pageNum = pageObjectNumbers[idx];
+    const contentNum = contentObjectNumbers[idx];
+    const startY = height - margin - fontSize;
+    const streamLines = [
+      'BT',
+      `/F1 ${fontSize} Tf`,
+      `${lineHeight} TL`,
+      `1 0 0 1 ${margin} ${startY} Tm`,
+      ...pageLines.map((line, lineIdx) => lineIdx === 0 ? `(${escapePdfText(line)}) Tj` : [`T*`, `(${escapePdfText(line)}) Tj`]).flat(),
+      'ET',
+    ];
+
+    objects[pageNum] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${width.toFixed(2)} ${height.toFixed(2)}] /Resources << /Font << /F1 3 0 R >> >> /Contents ${contentNum} 0 R >>`;
+    objects[contentNum] = `<< /Length ${streamLines.join('\n').length} >>\nstream\n${streamLines.join('\n')}\nendstream`;
+  });
+
+  const header = '%PDF-1.4\n%1234\n';
+  let body = '';
+  const offsets: number[] = [0];
+  objects.forEach((obj, idx) => {
+    if (!obj) return;
+    offsets[idx] = header.length + body.length;
+    body += `${idx} 0 obj\n${obj}\nendobj\n`;
+  });
+
+  const xrefStart = header.length + body.length;
+  let xref = `xref\n0 ${objects.length}\n0000000000 65535 f \n`;
+  for (let i = 1; i < objects.length; i++) {
+    const offset = offsets[i] || 0;
+    xref += `${offset.toString().padStart(10, '0')} 00000 n \n`;
+  }
+
+  const trailer = `trailer\n<< /Size ${objects.length} /Root 1 0 R /Info << /Title (${escapePdfText(title)}) >> >>\nstartxref\n${xrefStart}\n%%EOF`;
+  const pdf = `${header}${body}${xref}${trailer}`;
+  return new Blob([pdf], { type: 'application/pdf' });
+};
+
 export function convertMarkdownToHtml(md: string): string {
   let html = md;
   
@@ -256,11 +392,7 @@ export function compileDocumentHtml({
 export function exportAsWord(params: ExportParams): void {
   const htmlContent = compileDocumentHtml(params);
   const blob = new Blob(['\ufeff' + htmlContent], { type: 'application/msword' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${params.docTitle.toLowerCase().replace(/[^a-z0-9]/g, '_')}.docx`;
-  a.click();
+  downloadBlob(blob, `${params.docTitle.toLowerCase().replace(/[^a-z0-9]/g, '_')}.docx`);
 }
 
 export function exportAsPages(params: ExportParams): void {
@@ -268,9 +400,26 @@ export function exportAsPages(params: ExportParams): void {
   // Pages can open rich HTML/MSWord layouts directly, so downloading it with a .pages dual extension 
   // or compatible application header ensures seamless import by Apple Pages
   const blob = new Blob(['\ufeff' + htmlContent], { type: 'application/x-iwork-pages-sffpages' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${params.docTitle.toLowerCase().replace(/[^a-z0-9]/g, '_')}.pages`;
-  a.click();
+  downloadBlob(blob, `${params.docTitle.toLowerCase().replace(/[^a-z0-9]/g, '_')}.pages`);
+}
+
+export function exportAsHtml(params: ExportParams): void {
+  const htmlContent = compileDocumentHtml(params);
+  const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+  downloadBlob(blob, `${params.docTitle.toLowerCase().replace(/[^a-z0-9]/g, '_')}.html`);
+}
+
+export function exportAsPdf(params: ExportParams): void {
+  const plainText = markdownToPlainText(params.content);
+  const lines = [
+   params.docTitle.toUpperCase(),
+   params.docSubtitle,
+   `Author: ${params.docAuthor}`,
+   '',
+   ...plainText.split('\n'),
+   '',
+   ...params.footnotes.map((fn) => `[${fn.number}] ${fn.text}`),
+  ];
+  const blob = createTextPdfBlob(params.docTitle, lines, params.paperSize, params.orientation);
+  downloadBlob(blob, `${params.docTitle.toLowerCase().replace(/[^a-z0-9]/g, '_')}.pdf`);
 }
