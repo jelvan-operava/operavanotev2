@@ -301,6 +301,19 @@ export default function App() {
   });
 
   const [paypalModalOpen, setPaypalModalOpen] = useState(false);
+  const [paypalSubscription, setPaypalSubscription] = useState<{
+    subscriptionId: string;
+    plan: SubscriptionPlan;
+    status: string;
+    trialEndsAt: string | null;
+    payerEmail: string | null;
+  } | null>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('bolek_paypal_subscription') || 'null');
+    } catch (e) {
+      return null;
+    }
+  });
 
   const [featureAccess, setFeatureAccess] = useState<FeatureAccessConfig>(() => {
     const saved = localStorage.getItem('bolek_feature_access');
@@ -363,6 +376,60 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('bolek_user_subscription', userSubscription);
   }, [userSubscription]);
+
+  useEffect(() => {
+    if (paypalSubscription) {
+      localStorage.setItem('bolek_paypal_subscription', JSON.stringify(paypalSubscription));
+    } else {
+      localStorage.removeItem('bolek_paypal_subscription');
+    }
+  }, [paypalSubscription]);
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const subscriptionId = url.searchParams.get('subscription_id');
+    const plan = url.searchParams.get('plan') as SubscriptionPlan | null;
+
+    if (!subscriptionId || !plan || (plan !== 'pro' && plan !== 'enterprise')) {
+      return;
+    }
+
+    const syncPayPalSubscription = async () => {
+      try {
+        const response = await fetch(`/api/paypal/subscription-status?subscription_id=${encodeURIComponent(subscriptionId)}`);
+        const payload = await response.json();
+
+        if (!response.ok) {
+          throw new Error(payload?.error || 'Unable to verify PayPal subscription.');
+        }
+
+        setUserSubscription(plan);
+        setIsSimulatingRegular(false);
+        setFeatureAccess(prev => ({
+          ...prev,
+          send: true,
+          bolekauth: true,
+          futureFeatures: true,
+        }));
+        setPaypalSubscription({
+          subscriptionId,
+          plan,
+          status: payload.status || 'UNKNOWN',
+          trialEndsAt: payload.trialEndsAt || null,
+          payerEmail: payload.subscriberEmail || null,
+        });
+
+        localStorage.removeItem('bolek_pending_paypal_plan');
+        localStorage.removeItem('bolek_pending_paypal_subscription');
+        window.history.replaceState({}, '', '/desk');
+        showToast(`PayPal subscription active: ${plan.toUpperCase()} plan with a 10-day trial.`);
+      } catch (error) {
+        console.error('PayPal return verification failed:', error);
+      }
+    };
+
+    syncPayPalSubscription();
+  }, []);
 
   // Tab management state
   const [openTabs, setOpenTabs] = useState<Record<ActiveTab, boolean>>({
