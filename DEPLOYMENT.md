@@ -24,7 +24,7 @@
 
 ### Root `wrangler.toml`
 
-- D1 binding: `DB`
+- D1 binding: `DB` (set the production database UUID in `wrangler.toml`)
 - R2 binding: `STICKY_BUCKET`
 - Environment: `ENVIRONMENT=production`
 
