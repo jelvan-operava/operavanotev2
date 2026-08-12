@@ -2,7 +2,6 @@ import express from "express";
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
-import { fileURLToPath } from "url";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import {
@@ -22,9 +21,8 @@ import {
   resetUserPasswordWithToken
 } from "./src/server/authStore.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const legalTermsPath = path.join(__dirname, "terms-conditions&privacypolicy");
+const appRoot = process.cwd();
+const legalTermsPath = path.join(appRoot, "terms-conditions&privacypolicy");
 const REPO_URL = "https://github.com/jelvan-operava/operavanotev2";
 
 function getAppUrl() {
@@ -1098,13 +1096,13 @@ async function startServer() {
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
-      root: __dirname,
+      root: appRoot,
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.resolve(__dirname, 'dist');
+    const distPath = path.resolve(appRoot, 'dist');
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
